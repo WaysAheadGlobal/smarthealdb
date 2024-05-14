@@ -278,7 +278,7 @@ def get_all_patient_details():
 
     try:
         # Verify the JWT token using the secret key
-        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
     except jwt.ExpiredSignatureError:
         return jsonify({'error': 'Token has expired'}), 401
     except jwt.InvalidTokenError:
