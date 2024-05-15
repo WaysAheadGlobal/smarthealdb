@@ -3,12 +3,14 @@ import pymysql
 import jwt
 import random
 import string
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 import datetime
 import os
 import uuid
+from dotenv import load_dotenv
+from twilio.rest import Client
+from datetime import datetime, timedelta
+import requests
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -27,12 +29,15 @@ db = pymysql.connect(
     cursorclass=pymysql.cursors.DictCursor
 )
 
+account_sid = os.getenv('acc_sid')
+auth_token = os.getenv('auth_token')
+twilio_number = os.getenv('tn')
+
+
 # Secret key used for verifying JWT tokens (should be the same as in your PHP API)
 JWT_SECRET_KEY = 'CkOPcOppyh31sQcisbyOM3RKD4C2G7SzQmuG5LePt9XBarsxgjm0fc7uOECcqoGm'
 
-# SMTP credentials
-SENDER_EMAIL = 'ghoshrudrakshi@gmail.com'
-PASSWORD = None
+
 
 def generate_session_id():
     return str(uuid.uuid4())
@@ -41,19 +46,22 @@ def generate_session_id():
 def generate_license_key():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
 
-# Function to send email
-def send_email(email, license_key):
-    msg = MIMEMultipart()
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = email
-    msg['Subject'] = 'License Key'
-    body = f'Your license key is: {license_key}'
-    msg.attach(MIMEText(body, 'plain'))
 
-    with smtplib.SMTP('smtp.freesmtpservers.com', 587) as smtp:
-        #smtp.starttls()
-        smtp.login(SENDER_EMAIL, PASSWORD)
-        smtp.send_message(msg)  
+
+def generate_patient_id():
+    cursor = db.cursor()
+    cursor.execute("SELECT MAX(id) FROM patients")
+    
+    result = cursor.fetchone()
+    last_id = result['MAX(id)'] if result['MAX(id)'] is not None else 0  # Handle the case when the table is empty
+    
+    prefix = "AB"  # Your 2 characters prefix
+    formatted_id = f"{prefix}000{last_id + 1}"
+    
+    cursor.close()
+    db.close()
+    
+    return formatted_id
 
 @app.route('/add_data', methods=['POST'])
 def add_data():
@@ -78,16 +86,31 @@ def add_data():
             else:
                 # Generate UUID for session
                 uuid = generate_session_id()
-                # Insert data into organisations table
-                query = "INSERT INTO organisations (name, email, c_code, phone, uuid) VALUES (%s, %s, %s, %s, %s)"
-                cursor.execute(query, (name, email, c_code, phone, uuid))
-                db.commit()
-                # Generate license key and update organisations table
+                # Generate license key
                 license_key = generate_license_key()
-                query = "UPDATE organisations SET licence_key = %s WHERE email = %s"
-                cursor.execute(query, (license_key, email))
-                db.commit()
-                return jsonify({'message': 'Data added successfully', 'license_key': license_key}), 200
+
+                # Send email with license key
+                email_payload = {
+                    'Recipient': email,
+                    'Subject': 'License key for SmartHeal',
+                    'Body': f'Your license key is: {license_key}',
+                    'ApiKey': '6A7339A3-E70B-4A8D-AA23-0264125F4959'
+                }
+
+                email_response = requests.post(
+                    'https://api.waysdatalabs.com/api/EmailSender/SendMail',
+                    headers={},
+                    data=email_payload
+                )
+
+                if email_response.status_code == 200:
+                    # Insert data into organisations table
+                    query = "INSERT INTO organisations (name, email, c_code, phone, uuid, licence_key) VALUES (%s, %s, %s, %s, %s, %s)"
+                    cursor.execute(query, (name, email, c_code, phone, uuid, license_key))
+                    db.commit()
+                    return jsonify({'message': 'Data added successfully', 'license_key': license_key}), 200
+                else:
+                    return jsonify({'error': 'Failed to send email'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -210,7 +233,7 @@ def save_department_location():
     try:
         with db.cursor() as cursor:
             query = "UPDATE organisations SET departments = %s, location = %s WHERE email = %s;"
-            cursor.execute(query, (department, location))
+            cursor.execute(query, (department, location, email))
             db.commit()
         return jsonify({'message': 'Department and location saved successfully'}), 200
     except Exception as e:
@@ -251,14 +274,15 @@ def add_wound_details():
     exudate = data.get('exudate')
     periwound = data.get('periwound')
     periwound_type = data.get('periwound_type')
+    patient_id = data.get('patient_id') 
 
     if not (length and breadth and depth and area and moisture):
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
         with db.cursor() as cursor:
-            query = "INSERT INTO wounds (height, breadth, depth, area, moisture, position, tissue, exudate, periwound, periwound_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            cursor.execute(query, (length, breadth, depth, area, moisture, wound_location, tissue, exudate, periwound, periwound_type))
+            query = "UPDATE wounds SET height = %s, breadth = %s, depth = %s , area = %s , moisture = %s, position = %s , tissue = %s, exudate = %s, periwound = %s, periwound_type = %s WHERE patient_id = %s;"
+            cursor.execute(query, (length, breadth, depth, area, moisture, wound_location, tissue, exudate, periwound, periwound_type, patient_id))
             db.commit()
             return jsonify({'message': 'Wound details added successfully'}), 200
     except Exception as e:
@@ -302,6 +326,7 @@ def add_patient():
     name = data.get('name')
     dob = data.get('dob')
     gender = data.get('gender')
+    patient_id = generate_patient_id()
     
     auth_header = request.headers.get('Authorization')
 
@@ -322,13 +347,213 @@ def add_patient():
     
     try:
         with db.cursor() as cursor:
-            query = "INSERT INTO patients (name, dob, gender, uuid) VALUES (%s, %s, %s, %s)"
-            cursor.execute(query, (name, dob, gender, uuid))
+            pat_query = "INSERT INTO patients (name, dob, gender, uuid, patient_id) VALUES (%s, %s, %s, %s, %s)"
+            wound_query = "INSERT INTO WOUNDS (patients_id) VALUES (%s)"
+            cursor.execute(pat_query, (name, dob, gender, uuid, patient_id))
+            cursor.execute(wound_query, ( patient_id))
         db.commit()
     finally:
         db.close()
 
-    return jsonify({'message': 'Patient added successfully'})
+    return jsonify({'message': 'Patient added successfully', 'patient_id': patient_id})
 
 if __name__ == '__main__':
     app.run(debug=True)
+    
+
+
+# API endpoint to search existing patients
+@app.route('/search_patient', methods=['GET'])
+def search_patient():
+    auth_header = request.headers.get('Authorization')
+
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+    data = request.json
+    name = data.get('name')
+    
+    if not name:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with db.cursor() as cursor:
+            query = "SELECT * FROM patients WHERE name = %s"
+            cursor.execute(query, (name,))
+            patient = cursor.fetchall()
+            if not patient:
+                return jsonify({'message': 'No patients found with this name'}), 404
+            return jsonify({'patient': patient}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+@app.route('/generate_prescription', methods=['GET'])
+def generate_prescription():
+    auth_header = request.headers.get('Authorization')
+
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+    
+    data = request.json
+    patient_id = data.get('patient_id')
+    
+    if not patient_id:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with db.cursor() as cursor:
+            # Fetch patient details
+            patient_query = "SELECT * FROM patients WHERE patient_id = %s"
+            cursor.execute(patient_query, (patient_id,))
+            patient_details = cursor.fetchone()
+            if not patient_details:
+                return jsonify({'message': 'No patient found with this ID'}), 404
+
+            # Fetch wound details
+            wound_query = "SELECT * FROM wounds WHERE patient_id = %s"
+            cursor.execute(wound_query, (patient_id,))
+            wound_details = cursor.fetchall()
+
+            # Determine wound dimension category based on area
+            wound_category = []
+            for wound in wound_details:
+                area = wound['area_cm2']
+                if area <= 5:
+                    dimension = 'Small'
+                elif 5 < area <= 20:
+                    dimension = 'Medium'
+                else:
+                    dimension = 'Large'
+                wound_category.append((wound['wound_type'], dimension))
+
+            # Fetch medications for the wounds
+            medication_details = []
+            for wound_type, dimension in wound_category:
+                medication_query = """
+                SELECT * FROM WoundMedications
+                WHERE WoundType = %s AND WoundDimensions = %s
+                """
+                cursor.execute(medication_query, (wound_type, dimension))
+                medications = cursor.fetchall()
+                medication_details.extend(medications)
+
+            prescription = {
+                'patient_details': patient_details,
+                'wound_details': wound_details,
+                'medication_details': medication_details
+            }
+
+            return jsonify({'prescription': prescription}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+
+@app.route('/verify_pin', methods=['POST'])
+def verify_pin():
+    data = request.json
+    email = data.get('email')
+    pin = data.get('pin')
+
+    if not (email and pin):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with db.cursor() as cursor:
+            # Query to verify the pin
+            query = "SELECT pin FROM organisations WHERE email = %s"
+            cursor.execute(query, (email,))
+            result = cursor.fetchone()
+
+            if result:
+                if result['pin'] == pin:
+                    return jsonify({'message': 'Pin verified successfully'}), 200
+                else:
+                    return jsonify({'error': 'Invalid pin'}), 400
+            else:
+                return jsonify({'error': 'Email not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/send_otp', methods=['POST'])
+def send_otp():
+    data = request.json
+    phone = data.get('phone')
+
+    # Connect to database
+    
+    cursor = db.cursor(pymysql.cursors.DictCursor)
+
+    # Fetch professional details from the database
+    cursor.execute("SELECT * FROM organisations WHERE phone=%s", (phone))
+    professional = cursor.fetchone()
+
+    # Close database connection
+    cursor.close()
+    db.close()
+
+    if professional:
+        phone_with_code = professional['c_code'] + professional['phone']
+        otp = generate_otp()
+        send_sms(phone_with_code, otp)
+
+        # Update OTP details in database
+        expiry_time = datetime.now() + timedelta(minutes=5)
+        update_otp_in_database(phone, otp, expiry_time)
+        token = jwt.encode({'email':professional['email'], 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)}, JWT_SECRET_KEY, algorithm='HS256')
+        return jsonify({'status': 200, 'message': 'OTP Sent on mobile.'}), 200
+    else:
+        return jsonify({'status': 0, 'message': 'OOPS! phone Does Not Exit!','token':token}), 404
+
+def send_sms(phone, otp):
+    client = Client(account_sid, auth_token)
+    message = client.messages.create(
+        body=f"Your verification code is: {otp}. Don't share this code with anyone; our employees will never ask for the code.",
+        from_=twilio_number,
+        to=phone
+    )
+    
+
+def generate_otp():
+    return str(random.randint(1000, 9999))
+
+def update_otp_in_database(phone, otp, expiry_time):
+    # Connect to database
+    
+    cursor = db.cursor()
+
+    # Update OTP details
+    cursor.execute("UPDATE organisations SET otp=%s, otp_expiry=%s WHERE phone=%s", (otp, expiry_time, phone))
+    db.commit()
+
+    # Close database connection
+    cursor.close()
+    db.close()
+    
+
+if __name__ == '__main__':
+    app.run(debug=False)
+
+
