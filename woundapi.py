@@ -8,7 +8,6 @@ import os
 import uuid
 from dotenv import load_dotenv
 from twilio.rest import Client
-from datetime import datetime, timedelta
 import requests
 load_dotenv()
 
