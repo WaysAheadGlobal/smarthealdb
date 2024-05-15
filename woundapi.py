@@ -509,11 +509,6 @@ def send_otp():
     # Fetch professional details from the database
     cursor.execute("SELECT * FROM organisations WHERE phone=%s", (phone))
     professional = cursor.fetchone()
-
-    # Close database connection
-    cursor.close()
-    db.close()
-
     if professional:
         phone_with_code = professional['c_code'] + professional['phone']
         otp = generate_otp()
@@ -547,11 +542,6 @@ def update_otp_in_database(phone, otp, expiry_time):
     # Update OTP details
     cursor.execute("UPDATE organisations SET otp=%s, otp_expiry=%s WHERE phone=%s", (otp, expiry_time, phone))
     db.commit()
-
-    # Close database connection
-    cursor.close()
-    db.close()
-    
 
 if __name__ == '__main__':
     app.run(debug=False)
