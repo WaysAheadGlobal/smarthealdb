@@ -417,9 +417,10 @@ def generate_prescription():
             wound_details = cursor.fetchall()
 
             # Determine wound dimension category based on area
+            
             wound_category = []
             for wound in wound_details:
-                area = wound['area_cm2']
+                area = wound['height']*wound['width']
                 if area <= 5:
                     dimension = 'Small'
                 elif 5 < area <= 20:
