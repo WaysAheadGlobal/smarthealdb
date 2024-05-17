@@ -333,9 +333,9 @@ def add_patient():
         with db.cursor() as cursor:
             uuid = generate_session_id()
             pat_query = "INSERT INTO patients (name, dob, gender, uuid, patient_id) VALUES (%s, %s, %s, %s, %s)"
-            wound_query = "INSERT INTO WOUNDS (patient_id) VALUES (%s)"
+            wound_query = "INSERT INTO WOUNDS (patient_id, uuid) VALUES (%s, %s)"
             cursor.execute(pat_query, (name, dob, gender, uuid, patient_id))
-            cursor.execute(wound_query, ( patient_id))
+            cursor.execute(wound_query, ( patient_id, uuid))
             db.commit()
         return jsonify({'message': 'Patient added successfully', 'patient_id': patient_id})
     except Exception as e:
