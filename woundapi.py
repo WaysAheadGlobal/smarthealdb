@@ -184,7 +184,7 @@ def fetch_name_phone():
     try:
         with db.cursor() as cursor:
             query = "SELECT name, phone FROM organisations WHERE email = %s"
-            cursor.execute(query, (email))
+            cursor.execute(query, (email,))
             data = cursor.fetchall()
             return jsonify(data), 200
     except Exception as e:
