@@ -500,9 +500,9 @@ def send_otp():
         expiry_time = datetime.datetime.utcnow()  +  datetime.timedelta(minutes=5)
         update_otp_in_database(phone, otp, expiry_time)
         token = jwt.encode({'email':professional['email'], 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)}, JWT_SECRET_KEY, algorithm='HS256')
-        return jsonify({'status': 200, 'message': 'OTP Sent on mobile.'}), 200
+        return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token':token ,'otp':otp}), 200
     else:
-        return jsonify({'status': 0, 'message': 'OOPS! phone Does Not Exit!','token':token}), 404
+        return jsonify({'status': 0, 'message': 'OOPS! phone Does Not Exit!'}), 404
 
 def send_sms(phone, otp):
     client = Client(account_sid, auth_token)
