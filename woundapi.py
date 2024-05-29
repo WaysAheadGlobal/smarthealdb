@@ -271,7 +271,7 @@ def add_wound_details():
 
     try:
         with db.cursor() as cursor:
-            query = "UPDATE wounds SET height = %s, breadth = %s, depth = %s , area = %s , moisture = %s, position = %s , tissue = %s, exudate = %s, periwound = %s, periwound_type = %s WHERE patient_id = %s;"
+            query = "UPDATE wounds SET height = %s, width = %s, depth = %s , area = %s , moisture = %s, position = %s , tissue = %s, exudate = %s, periwound = %s, periwound_type = %s WHERE patient_id = %s;"
             cursor.execute(query, (length, breadth, depth, area, moisture, wound_location, tissue, exudate, periwound, periwound_type, patient_id))
             db.commit()
             return jsonify({'message': 'Wound details added successfully'}), 200
