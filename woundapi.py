@@ -25,6 +25,9 @@ DB_PASSWORD = 'I^4y1b12y'
 DATABASE_URL = f"mysql+pymysql://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}/{DB_DATABASE}"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
+# Create session factory
+Session = sessionmaker(bind=engine)
+
 account_sid = os.getenv('acc_sid')
 auth_token = os.getenv('auth_token')
 twilio_number = os.getenv('tn')
