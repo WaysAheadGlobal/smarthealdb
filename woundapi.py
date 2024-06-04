@@ -303,9 +303,15 @@ def get_all_patient_details():
         return jsonify({'error': 'Invalid token'}), 401
 
     try:
+        data = request.get_json()
+        email = data.get('email') if data else None
+
+        if not email:
+            return jsonify({'error': 'Missing required fields'}), 400
+
         with Session() as session:
-            query = text("SELECT * FROM patients")
-            patient_details = session.execute(query).fetchall()
+            query = text("SELECT * FROM patients WHERE email = :email")
+            patient_details = session.execute(query, {'email': email}).fetchall()
             # Convert rows to list of dictionaries using _mapping attribute
             patient_dicts = [dict(row._mapping) for row in patient_details]
             return jsonify({'patient_details': patient_dicts}), 200
@@ -321,6 +327,10 @@ def add_patient():
     name = data.get('name')
     dob = data.get('dob')
     gender = data.get('gender')
+    age = data.get('age')
+    height = data.get('height')
+    weight = data.get('weight')
+    email = data.get('email')
     patient_id = generate_patient_id()
     auth_header = request.headers.get('Authorization')
 
@@ -338,8 +348,8 @@ def add_patient():
     try:
         with Session() as session:
             uuid = generate_session_id()
-            pat_query = text("INSERT INTO patients (name, dob, gender, uuid, patient_id) VALUES (:name, :dob, :gender, :uuid, :patient_id)")
-            session.execute(pat_query, {'name': name, 'dob': dob, 'gender':gender, 'uuid': uuid, 'patient_id': patient_id})
+            pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, uuid, patient_id) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :uuid, :patient_id)")
+            session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'uuid': uuid, 'patient_id': patient_id})
             wound_query = text("INSERT INTO wounds ( uuid, patient_id) VALUES (:uuid, :patient_id)")
             session.execute(wound_query, {'uuid': uuid, 'patient_id': patient_id})
             # Commit the transaction to insert data into the database
