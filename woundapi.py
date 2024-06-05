@@ -543,6 +543,274 @@ def update_otp_in_database(session, phone, otp, expiry_time):
     except Exception as e:
         return str(e)
 
+
+
+@app.route('/med_add_data', methods=['POST'])
+def med_add_data():
+    data = request.json
+    name = data.get('name')
+    email = data.get('email')
+    c_code = data.get('c_code')
+    phone = data.get('phone')
+
+    if not (name and email and c_code and phone):
+        return jsonify({'error': 'Missing required fields'}), 400
+    try:
+        with Session() as session:
+            # Check if email already exists
+            query = text("SELECT email FROM users WHERE email = :email")
+            existing_email = session.execute(query, {'email': email}).fetchone()
+
+            if existing_email:
+                return jsonify({'error': 'Email already exists. Please login.'}), 400
+            else:
+                # Generate UUID for session
+                uuid = generate_session_id()
+                # Generate license key
+                license_key = generate_license_key()
+
+                # Send email with license key
+                email_payload = {
+                    'Recipient': email,
+                    'Subject': 'License key for SmartHeal',
+                    'Body': f'Your license key is: {license_key}',
+                    'ApiKey': '6A7339A3-E70B-4A8D-AA23-0264125F4959'
+                }
+
+                email_response = requests.post(
+                    'https://api.waysdatalabs.com/api/EmailSender/SendMail',
+                    headers={},
+                    data=email_payload
+                )
+
+                if email_response.status_code == 200:
+                    # Insert data into organisations table
+                    query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key)")
+                    session.execute(query, {'name': name, 'email': email, 'c_code': c_code, 'phone': phone, 'uuid': uuid, 'license_key': license_key})
+                    session.commit()
+                    return jsonify({'message': 'Data added successfully', 'license_key': license_key}), 200
+                else:
+                    return jsonify({'error': 'Failed to send email'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/med_verify_license_key', methods=['POST'])
+def med_verify_license_key():
+    data = request.json
+    email = data.get('email')
+    license_key = data.get('license_key')
+
+    if not (email and license_key):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            query = text("SELECT licence_key FROM users WHERE email = :email")
+            result = session.execute(query, {'email': email}).fetchone()
+            if result and result.licence_key == license_key:
+                # Generate JWT token
+                token = jwt.encode({'email': email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, JWT_SECRET_KEY, algorithm='HS256')
+                return jsonify({'message': 'License key verified successfully', 'token': token}), 200
+            else:
+                return jsonify({'error': 'Invalid license key'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/med_create_pin', methods=['POST'])
+def med_create_pin():
+    data = request.json
+    license_key = data.get('license_key')
+    pin = data.get('pin')
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+    if not pin:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            query = text("UPDATE users SET pin = :pin WHERE licence_key = :license_key")
+            session.execute(query, {'pin': pin, 'license_key': license_key})
+            session.commit()
+        return jsonify({'message': 'PIN created successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/med_fetch_data', methods=['GET'])
+def med_fetch_name_phone():
+    try:
+        data = request.get_json()
+        email = data.get('email') if data else None
+    except Exception as e:
+        return jsonify({'error': 'Invalid JSON input'}), 400
+
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+    if not email:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Fetch only name and phone for the specified email
+            query = text("SELECT name, phone FROM users WHERE email = :email")
+            result = session.execute(query, {'email': email}).fetchall()
+            # Convert rows to list of dictionaries
+            result_dicts = [{'name': row[0], 'phone': row[1]} for row in result]
+            return jsonify(result_dicts), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# API endpoint to save department and location
+@app.route('/save_med_data', methods=['POST'])
+def med_save_department_location():
+    data = request.json
+    speciality = data.get('speciality')
+    location = data.get('location')
+    email = data.get('email')
+    latitude = data.get('latitude')
+    longitude = data.get('longitude')
+    org = data.get('org')
+    designation = data.get('designation')
+
+    if not (speciality, location, latitude, longitude, org and email):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error':'Invalid Token'}), 401
+
+    try:
+        with Session() as session:
+            query = text("UPDATE users SET speciality = :speciality, location = :location, latitude = :latitude, longitude = :longitude, org = :org, designation = :designation WHERE email = :email;")
+            session.execute(query, {'speciality': speciality, 'location': location, 'latitude': latitude, 'longitude': longitude, 'org': org, 'designation': designation, 'email': email})
+            session.commit()
+        return jsonify({'message': 'Speciality, location, organisation and designation saved successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/med_verify_pin', methods=['POST'])
+def med_verify_pin():
+    data = request.json
+    email = data.get('email')
+    pin = data.get('pin')
+
+    if not (email and pin):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Query to verify the pin
+            query = text("SELECT pin FROM users WHERE email = :email")
+            result = session.execute(query, {'email': email}).fetchone()
+
+            if result:
+                if result.pin == pin:  # Using attribute access instead of dictionary-style indexing
+                    return jsonify({'message': 'Pin verified successfully'}), 200
+                else:
+                    return jsonify({'error': 'Invalid pin'}), 400
+            else:
+                return jsonify({'error': 'Email not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/med_send_otp', methods=['POST'])
+def med_send_otp():
+    data = request.json
+    phone = data.get('phone')
+
+    if not phone:
+        return jsonify({'error': 'Phone number is required'}), 400
+
+    try:
+        with Session() as session:
+            # Fetch professional details from the database
+            query = text("SELECT * FROM users WHERE phone = :phone")
+            organisation = session.execute(query, {'phone': phone}).fetchone()
+
+            if organisation:
+                phone_with_code = organisation.c_code + organisation.phone
+                otp = generate_otp()
+                send_sms(phone_with_code, otp)
+
+                # Update OTP details in database
+                expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+                update_otp_in_database(session, phone, otp, expiry_time)
+                
+                token = jwt.encode({'email': organisation.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, JWT_SECRET_KEY, algorithm='HS256')
+                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email}), 200
+            else:
+                return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def send_sms(phone, otp):
+    client = Client(account_sid, auth_token)
+    message = client.messages.create(
+        body=f"Your verification code is: {otp}. Don't share this code with anyone; our employees will never ask for the code.",
+        from_=twilio_number,
+        to=phone
+    )
+
+
+def generate_otp():
+    return str(random.randint(1000, 9999))
+
+
+def update_otp_in_med_database(session, phone, otp, expiry_time):
+    try:
+        # Query to update OTP details
+        query = text("UPDATE users SET otp= :otp, otp_expiry= :expiry_time WHERE phone= :phone")
+        session.execute(query, {'otp': otp, 'expiry_time': expiry_time, 'phone': phone})
+        session.commit()
+    except Exception as e:
+        return str(e)
+
 if __name__ == '__main__':
     app.run(debug=False)
 
