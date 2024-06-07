@@ -811,6 +811,456 @@ def update_otp_in_med_database(session, phone, otp, expiry_time):
     except Exception as e:
         return str(e)
 
+
+
+
+@app.route('/update_scheduled_date', methods=['POST'])
+def update_scheduled_date():
+    data = request.json
+    email = data.get('email')
+    patient_id = data.get('patient_id')
+    scheduled_date = data.get('scheduled_date')
+
+    if not (email and patient_id and scheduled_date):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            query = text("UPDATE patients SET scheduled_date = :scheduled_date WHERE email = :email AND patient_id = :patient_id")
+            result = session.execute(query, {'scheduled_date': scheduled_date, 'email': email, 'patient_id': patient_id})
+            session.commit()
+
+            if result.rowcount == 0:
+                return jsonify({'error': 'No matching record found'}), 404
+
+            return jsonify({'message': 'Scheduled date updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/total_appointments_till_date', methods=['GET'])
+def total_appointments_till_date():
+    data = request.json
+    date = data.get('date')
+
+    if not date:
+        return jsonify({'error': 'Date parameter is required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("SELECT COUNT(*) as total_appointments FROM patients WHERE scheduled_date <= :date")
+            result = session.execute(query, {'date': date}).fetchone()
+
+            total_appointments = result[0]  # Accessing the first element of the tuple
+
+            return jsonify({'total_appointments': total_appointments}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+
+@app.route('/total_appointments_till_month', methods=['GET'])
+def total_appointments_till_month():
+    data = request.json
+    year = data.get('year')
+    month = data.get('month')
+
+    if not (year and month):
+        return jsonify({'error': 'Year and month parameters are required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("""
+                SELECT COUNT(*) as total_appointments
+                FROM patients
+                WHERE YEAR(scheduled_date) = :year AND MONTH(scheduled_date) = :month
+            """)
+            result = session.execute(query, {'year': year, 'month': month}).fetchone()
+
+            total_appointments = result[0]  # Accessing the first element of the tuple
+
+            return jsonify({'total_appointments': total_appointments}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    
+
+
+@app.route('/change_pin_org', methods=['POST'])
+def change_pin_org():
+    data = request.json
+    email = data.get('email')
+    current_pin = data.get('current_pin')
+    new_pin = data.get('new_pin')
+
+    if not (email and current_pin and new_pin):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Verify the current pin
+            query = text("SELECT pin FROM organisations WHERE email = :email")
+            result = session.execute(query, {'email': email}).fetchone()
+
+            if result:
+                if result.pin == current_pin:
+                    # Update with the new pin
+                    update_query = text("UPDATE organisations SET pin = :new_pin WHERE email = :email")
+                    session.execute(update_query, {'new_pin': new_pin, 'email': email})
+                    session.commit()
+                    return jsonify({'message': 'Pin updated successfully'}), 200
+                else:
+                    return jsonify({'error': 'Invalid current pin', 'pin': 'pin'}), 400
+            else:
+                return jsonify({'error': 'Email not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/forgot_pin_org', methods=['POST'])
+def forgot_pin_org():
+    data = request.json
+    email = data.get('email')
+    phone = data.get('phone')
+    otp = data.get('otp')
+    new_pin = data.get('new_pin')
+
+    if not (email and phone and otp and new_pin):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Verify the OTP
+            query = text("SELECT otp FROM organisations WHERE email = :email AND phone = :phone")
+            result = session.execute(query, {'email': email, 'phone': phone}).fetchone()
+
+            if result:
+                if result.otp == otp:
+                    # Update with the new pin
+                    update_query = text("UPDATE organisations SET pin = :new_pin WHERE email = :email AND phone = :phone")
+                    session.execute(update_query, {'new_pin': new_pin, 'email': email, 'phone': phone})
+                    session.commit()
+                    return jsonify({'message': 'Pin updated successfully'}), 200
+                else:
+                    return jsonify({'error': 'Invalid OTP'}), 400
+            else:
+                return jsonify({'error': 'Email or phone not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/send_otp_org', methods=['POST'])
+def send_otp_org():
+    data = request.json
+    phone = data.get('phone')
+
+    if not phone:
+        return jsonify({'error': 'Phone number is required'}), 400
+
+    try:
+        with Session() as session:
+            # Fetch organisation details from the database
+            query = text("SELECT * FROM organisations WHERE phone = :phone")
+            organisation = session.execute(query, {'phone': phone}).fetchone()
+
+            if organisation:
+                phone_with_code = organisation.c_code + organisation.phone
+                otp = generate_otp()
+                send_sms(phone_with_code, otp)
+
+                # Update OTP details in database
+                expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+                update_otp_in_database(session, phone, otp, expiry_time)
+                
+                return jsonify({'status': 200, 'message': 'OTP sent on mobile.'}), 200
+            else:
+                return jsonify({'status': 0, 'message': 'OOPS! Phone does not exist!'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def generate_otp():
+    return str(random.randint(1000, 9999))
+
+def send_sms(phone, otp):
+    client = Client(account_sid, auth_token)
+    client.messages.create(
+        body=f"Your verification code is: {otp}. Don't share this code with anyone; our employees will never ask for the code.",
+        from_=twilio_number,
+        to=phone
+    )
+
+def update_otp_in_database(session, phone, otp, expiry_time):
+    try:
+        # Query to update OTP details
+        query = text("UPDATE organisations SET otp= :otp, otp_expiry= :expiry_time WHERE phone= :phone")
+        session.execute(query, {'otp': otp, 'expiry_time': expiry_time, 'phone': phone})
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise e
+    
+
+
+@app.route('/organisation_details', methods=['GET'])
+def organisation_details():
+    data = request.json
+    email = data.get('email')
+
+    if not email:
+        return jsonify({'error': 'Email parameter is required'}), 400
+
+    try:
+        with Session() as session:
+            # Query to fetch organisation details and count of email occurrences in patients table
+            query = text("""
+                SELECT o.name, o.departments, o.location, o.latitude, o.longitude, o.about,
+                    COUNT(p.email) as patient_count
+                FROM organisations o
+                LEFT JOIN patients p ON o.email = p.email
+                WHERE o.email = :email
+            """)
+            result = session.execute(query, {'email': email}).fetchone()
+
+            if result:
+                response = {
+                    'name': result.name,
+                    'departments': result.departments,
+                    'location': result.location,
+                    'latitude': result.latitude,
+                    'longitude': result.longitude,
+                    'about': result.about,
+                    'patient_count': result.patient_count
+                }
+                return jsonify(response), 200
+            else:
+                return jsonify({'error': 'Organisation not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+@app.route('/change_pin_med', methods=['POST'])
+def change_pin_med():
+    data = request.json
+    email = data.get('email')
+    current_pin = data.get('current_pin')
+    new_pin = data.get('new_pin')
+
+    if not (email and current_pin and new_pin):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Verify the current pin
+            query = text("SELECT pin FROM users WHERE email = :email")
+            result = session.execute(query, {'email': email}).fetchone()
+
+            if result:
+                if result.pin == current_pin:
+                    # Update with the new pin
+                    update_query = text("UPDATE users SET pin = :new_pin WHERE email = :email")
+                    session.execute(update_query, {'new_pin': new_pin, 'email': email})
+                    session.commit()
+                    return jsonify({'message': 'Pin updated successfully'}), 200
+                else:
+                    return jsonify({'error': 'Invalid current pin', 'pin': 'pin'}), 400
+            else:
+                return jsonify({'error': 'Email not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/forgot_pin_med', methods=['POST'])
+def forgot_pin_med():
+    data = request.json
+    email = data.get('email')
+    phone = data.get('phone')
+    otp = data.get('otp')
+    new_pin = data.get('new_pin')
+
+    if not (email and phone and otp and new_pin):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Verify the OTP
+            query = text("SELECT otp FROM users WHERE email = :email AND phone = :phone")
+            result = session.execute(query, {'email': email, 'phone': phone}).fetchone()
+
+            if result:
+                if result.otp == otp:
+                    # Update with the new pin
+                    update_query = text("UPDATE users SET pin = :new_pin WHERE email = :email AND phone = :phone")
+                    session.execute(update_query, {'new_pin': new_pin, 'email': email, 'phone': phone})
+                    session.commit()
+                    return jsonify({'message': 'Pin updated successfully'}), 200
+                else:
+                    return jsonify({'error': 'Invalid OTP'}), 400
+            else:
+                return jsonify({'error': 'Email or phone not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/send_otp_med', methods=['POST'])
+def send_otp_med():
+    data = request.json
+    phone = data.get('phone')
+
+    if not phone:
+        return jsonify({'error': 'Phone number is required'}), 400
+
+    try:
+        with Session() as session:
+            # Fetch organisation details from the database
+            query = text("SELECT * FROM users WHERE phone = :phone")
+            organisation = session.execute(query, {'phone': phone}).fetchone()
+
+            if organisation:
+                phone_with_code = organisation.c_code + organisation.phone
+                otp = generate_otp()
+                send_sms(phone_with_code, otp)
+
+                # Update OTP details in database
+                expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+                update_otp_in_database(session, phone, otp, expiry_time)
+                
+                return jsonify({'status': 200, 'message': 'OTP sent on mobile.'}), 200
+            else:
+                return jsonify({'status': 0, 'message': 'OOPS! Phone does not exist!'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def generate_otp():
+    return str(random.randint(1000, 9999))
+
+def send_sms(phone, otp):
+    client = Client(account_sid, auth_token)
+    client.messages.create(
+        body=f"Your verification code is: {otp}. Don't share this code with anyone; our employees will never ask for the code.",
+        from_=twilio_number,
+        to=phone
+    )
+
+def update_otp_in_database(session, phone, otp, expiry_time):
+    try:
+        # Query to update OTP details
+        query = text("UPDATE users SET otp= :otp, otp_expiry= :expiry_time WHERE phone= :phone")
+        session.execute(query, {'otp': otp, 'expiry_time': expiry_time, 'phone': phone})
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise e
+    
+
+
+@app.route('/med_details', methods=['GET'])
+def med_details():
+    data = request.json
+    email = data.get('email')
+
+    if not email:
+        return jsonify({'error': 'Email parameter is required'}), 400
+
+    try:
+        with Session() as session:
+            # Query to fetch organisation details and count of email occurrences in patients table
+            query = text("""
+                SELECT o.name, o.departments, o.location, o.latitude, o.longitude, o.about,
+                    COUNT(p.email) as patient_count
+                FROM users o
+                LEFT JOIN patients p ON o.email = p.email
+                WHERE o.email = :email
+            """)
+            result = session.execute(query, {'email': email}).fetchone()
+
+            if result:
+                response = {
+                    'name': result.name,
+                    'departments': result.departments,
+                    'location': result.location,
+                    'latitude': result.latitude,
+                    'longitude': result.longitude,
+                    'about': result.about,
+                    'patient_count': result.patient_count
+                }
+                return jsonify(response), 200
+            else:
+                return jsonify({'error': 'Organisation not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+@app.route('/update_patient_details', methods=['POST'])
+def update_patient_details():
+    data = request.json
+    patient_id = data.get('patient_id')
+    allergies = data.get('allergies')
+    past_history = data.get('past_history')
+    doctor_name = data.get('doctor_name')
+    care_facilities = data.get('care_facilities')
+
+    if not patient_id:
+        return jsonify({'error': 'Patient ID parameter is required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("""
+                UPDATE patients
+                SET allergy = :allergies, illness = :past_history, doctor = :doctor_name, org = :care_facilities
+                WHERE patient_id = :patient_id
+            """)
+            session.execute(query, {'allergies': allergies, 'past_history': past_history, 'doctor_name': doctor_name, 'care_facilities': care_facilities, 'patient_id': patient_id})
+            session.commit()
+
+            return jsonify({'message': 'Patient details updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+@app.route('/patient_details', methods=['GET'])
+def get_patient_details():
+    data = request.json
+    patient_id = data.get('patient_id')
+
+    if not patient_id:
+        return jsonify({'error': 'Patient ID parameter is required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("""
+                SELECT *
+                FROM patients
+                WHERE patient_id = :patient_id
+            """)
+            result = session.execute(query, {'patient_id': patient_id}).fetchone()
+
+            if result:
+                patient_details = {
+                    'patient_id': result.patient_id,
+                    'name': result.name,
+                    'age': result.age,
+                    'gender': result.gender,
+                    'dob': result.dob,
+                    'allergies': result.allergy,
+                    'past_history': result.illness,
+                    'doctor_name': result.doctor,
+                    'care_facilities': result.org
+                }
+                return jsonify(patient_details), 200
+            else:
+                return jsonify({'error': 'Patient not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=False)
 
