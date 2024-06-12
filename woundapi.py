@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import pymysql
@@ -11,6 +11,10 @@ import uuid
 from dotenv import load_dotenv
 from twilio.rest import Client
 import requests
+from werkzeug.utils import secure_filename
+
+
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -34,6 +38,18 @@ twilio_number = os.getenv('tn')
 
 # Secret key used for verifying JWT tokens (should be the same as in your PHP API)
 JWT_SECRET_KEY = 'CkOPcOppyh31sQcisbyOM3RKD4C2G7SzQmuG5LePt9XBarsxgjm0fc7uOECcqoGm'
+
+# Configuration for file uploads
+UPLOAD_FOLDER = 'uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+# Utility function to check allowed file extensions
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def generate_session_id():
@@ -1258,6 +1274,279 @@ def get_patient_details():
                 return jsonify(patient_details), 200
             else:
                 return jsonify({'error': 'Patient not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+# Route to serve uploaded files
+@app.route('/uploads/<patient_id>/<filename>')
+def uploaded_file(patient_id, filename):
+    return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], patient_id), filename)
+
+
+# Endpoint to store an image in the filesystem and save path in the database
+@app.route('/store_image', methods=['POST'])
+def store_image():
+    # Check if request contains image data
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image provided'}), 400
+
+    image_file = request.files['image']
+    patient_id = request.form.get('patient_id')
+
+    # Check if image file is empty
+    if image_file.filename == '' or not patient_id:
+        return jsonify({'error': 'Empty filename or patient ID provided'}), 400
+
+    # Generate a unique filename for the image
+    filename = secure_filename(image_file.filename)
+
+    try:
+        # Create patient folder if it doesn't exist
+        patient_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'patients', patient_id)
+        os.makedirs(patient_folder, exist_ok=True)
+
+        # Save image to the filesystem
+        image_path = os.path.join(patient_folder, filename)
+        image_file.save(image_path)
+
+        # Update the database with the image path
+        with Session() as session:
+            query = text("UPDATE patients SET profile_photo_path = :image_path WHERE patient_id = :patient_id")
+            session.execute(query, {'image_path': image_path, 'patient_id': patient_id})
+            session.commit()
+
+        return jsonify({'message': 'Image stored and path updated successfully', 'image_path': image_path}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# Endpoint to retrieve and serve the image using patient_id
+@app.route('/get_image', methods=['GET'])
+def get_image():
+    data = request.json
+    patient_id = data.get('patient_id')
+
+    if not patient_id:
+        return jsonify({'error': 'Patient ID parameter is required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("SELECT profile_photo_path FROM patients WHERE patient_id = :patient_id")
+            result = session.execute(query, {'patient_id': patient_id}).fetchone()
+
+            if result and result.profile_photo_path:
+                # Extract filename from the stored path
+                filename = os.path.basename(result.profile_photo_path)
+                
+                # Send the image file from the patient's folder
+                return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'patients', patient_id), filename)
+            else:
+                return jsonify({'error': 'Image not found for the given patient ID'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+# Endpoint to store an image for a wound in the filesystem and save path in the database
+@app.route('/store_wound_image', methods=['POST'])
+def store_wound_image():
+    # Check if request contains image data
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image provided'}), 400
+
+    image_file = request.files['image']
+    patient_id = request.form.get('patient_id')
+
+    # Check if image file is empty
+    if image_file.filename == '' or not patient_id:
+        return jsonify({'error': 'Empty filename or patient ID provided'}), 400
+
+    # Generate a unique filename for the image
+    filename = secure_filename(image_file.filename)
+
+    try:
+        # Create wounds folder if it doesn't exist
+        wounds_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'wounds')
+        os.makedirs(wounds_folder, exist_ok=True)
+
+        # Create patient folder inside wounds folder if it doesn't exist
+        patient_folder = os.path.join(wounds_folder, patient_id)
+        os.makedirs(patient_folder, exist_ok=True)
+
+        # Save image to the filesystem
+        image_path = os.path.join(patient_folder, filename)
+        image_file.save(image_path)
+
+        # Update the database with the image path
+        with Session() as session:
+            query = text("UPDATE wounds SET image = :image_path WHERE patient_id = :patient_id")
+            session.execute(query, {'image_path': image_path, 'patient_id': patient_id})
+            session.commit()
+
+        return jsonify({'message': 'Image stored and path updated successfully', 'image_path': image_path}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# Endpoint to retrieve and serve the image for a wound using patient_id
+@app.route('/get_wound_image', methods=['GET'])
+def get_wound_image():
+    data = request.json
+    patient_id = data.get('patient_id')
+
+    if not patient_id:
+        return jsonify({'error': 'Patient ID parameter is required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("SELECT image FROM wounds WHERE patient_id = :patient_id")
+            result = session.execute(query, {'patient_id': patient_id}).fetchone()
+
+            if result and result.image:
+                # Extract filename from the stored path
+                filename = os.path.basename(result.image)
+                
+                # Send the image file from the patient's folder
+                return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'wounds', patient_id), filename)
+            else:
+                return jsonify({'error': 'Image not found for the given patient ID'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+
+# Endpoint to store an image for a medical practitioner in the filesystem and save path in the database
+@app.route('/store_med_image', methods=['POST'])
+def store_med_image():
+    # Check if request contains image data
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image provided'}), 400
+
+    image_file = request.files['image']
+    email = request.form.get('email')
+
+    # Check if image file is empty
+    if image_file.filename == '' or not email:
+        return jsonify({'error': 'Empty filename or email provided'}), 400
+
+    # Generate a unique filename for the image
+    filename = secure_filename(image_file.filename)
+
+    try:
+        # Create medical practitioner folder if it doesn't exist
+        med_practitioner_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'medical_practitioners', email)
+        os.makedirs(med_practitioner_folder, exist_ok=True)
+
+        # Save image to the filesystem
+        image_path = os.path.join(med_practitioner_folder, filename)
+        image_file.save(image_path)
+
+        # Update the database with the image path
+        with Session() as session:
+            query = text("UPDATE users SET profile_photo_path = :image_path WHERE email = :email")
+            session.execute(query, {'image_path': image_path, 'email': email})
+            session.commit()
+
+        return jsonify({'message': 'Image stored and path updated successfully', 'image_path': image_path}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+# Endpoint to retrieve and serve the image for a medical practitioner using email
+@app.route('/get_med_image', methods=['GET'])
+def get_med_image():
+    data = request.json
+    email = data.get('email')
+
+    if not email:
+        return jsonify({'error': 'Email parameter is required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("SELECT profile_photo_path FROM users WHERE email = :email")
+            result = session.execute(query, {'email': email}).fetchone()
+
+            if result and result.profile_photo_path:
+                # Extract filename from the stored path
+                filename = os.path.basename(result.profile_photo_path)
+                
+                # Send the image file from the medical practitioner's folder
+                return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'medical_practitioners', email), filename)
+            else:
+                return jsonify({'error': 'Image not found for the given email'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+# Endpoint to store an image for a organisations in the filesystem and save path in the database
+@app.route('/store_org_image', methods=['POST'])
+def store_org_image():
+    # Check if request contains image data
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image provided'}), 400
+
+    image_file = request.files['image']
+    email = request.form.get('email')
+
+    # Check if image file is empty
+    if image_file.filename == '' or not email:
+        return jsonify({'error': 'Empty filename or email provided'}), 400
+
+    # Generate a unique filename for the image
+    filename = secure_filename(image_file.filename)
+
+    try:
+        # Create medical practitioner folder if it doesn't exist
+        med_practitioner_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'organisations', email)
+        os.makedirs(med_practitioner_folder, exist_ok=True)
+
+        # Save image to the filesystem
+        image_path = os.path.join(med_practitioner_folder, filename)
+        image_file.save(image_path)
+
+        # Update the database with the image path
+        with Session() as session:
+            query = text("UPDATE organisations SET profile_photo_path = :image_path WHERE email = :email")
+            session.execute(query, {'image_path': image_path, 'email': email})
+            session.commit()
+
+        return jsonify({'message': 'Image stored and path updated successfully', 'image_path': image_path}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+# Endpoint to retrieve and serve the image for a organisation using email
+@app.route('/get_org_image', methods=['GET'])
+def get_org_image():
+    data = request.json
+    email = data.get('email')
+
+    if not email:
+        return jsonify({'error': 'Email parameter is required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("SELECT profile_photo_path FROM organisations WHERE email = :email")
+            result = session.execute(query, {'email': email}).fetchone()
+
+            if result and result.profile_photo_path:
+                # Extract filename from the stored path
+                filename = os.path.basename(result.profile_photo_path)
+                
+                # Send the image file from the medical practitioner's folder
+                return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'organisations', email), filename)
+            else:
+                return jsonify({'error': 'Image not found for the given email'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
