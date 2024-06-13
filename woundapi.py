@@ -172,7 +172,7 @@ def create_pin():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/fetch_data', methods=['GET'])
+@app.route('/fetch_data', methods=['POST'])
 def fetch_name_phone():
     try:
         data = request.get_json()
