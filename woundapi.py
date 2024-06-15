@@ -68,7 +68,7 @@ def generate_patient_id():
         return formatted_id
 
 
-@app.route('/add_data', methods=['POST'])
+@app.route('/send_email', methods=['POST'])
 def add_data():
     data = request.json
     name = data.get('name')
@@ -86,7 +86,7 @@ def add_data():
             existing_user = session.execute(query, {'email': email, 'phone': phone}).fetchone()
 
             if existing_user:
-                return jsonify({'error': 'Email or phone already exists. Please login.'}), 400
+                return jsonify({'error': 'Email or phone already exists. Please login.'}), 401
             else:
                 # Generate UUID for session
                 uuid = generate_session_id()
@@ -140,35 +140,13 @@ def verify_license_key():
 def create_pin():
     data = request.json
     license_key = data.get('license_key')
+    email= data.get('email')
     pin = data.get('pin')
-    auth_header = request.headers.get('Authorization')
-
-    # Check if the Authorization header is present and has the correct format
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'error': 'Invalid Authorization header'}), 401
-
-    # Extract the JWT token from the Authorization header
-    token = auth_header.split(' ')[1]
-
-    try:
-        # Verify the JWT token using the secret key
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
-        email = payload['email']
-    except jwt.ExpiredSignatureError:
-        return jsonify({'error': 'Token has expired'}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({'error': 'Invalid token'}), 401
-
     if not pin:
-        return jsonify({'error': 'Missing required fields'}), 400
-
+        return jsonify({'error': 'Missing required fields'}), 401
     try:
         with Session() as session:
-            # Update the organisations table with the PIN
-            query = text("UPDATE organisations SET pin = :pin WHERE licence_key = :license_key")
-            session.execute(query, {'pin': pin, 'license_key': license_key})
-
-            # Save the rest of the data only after the PIN is created
+            token = jwt.encode({'email': email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
             query = text("INSERT INTO organisations (name, email, c_code, phone, uuid, licence_key, pin) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :pin)")
             session.execute(query, {
                 'name': data.get('name'),
@@ -180,8 +158,7 @@ def create_pin():
                 'pin': pin
             })
             session.commit()
-
-        return jsonify({'message': 'PIN created and data saved successfully'}), 200
+        return jsonify({'message': 'PIN created and data saved successfully', 'token': token}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
