@@ -551,7 +551,7 @@ def update_otp_in_database(session, phone, otp, expiry_time):
 
 
 
-@app.route('/med_add_data', methods=['POST'])
+@app.route('/med_send_email', methods=['POST'])
 def med_add_data():
     data = request.json
     name = data.get('name')
