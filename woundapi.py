@@ -561,14 +561,14 @@ def med_add_data():
 
     if not (name and email and c_code and phone):
         return jsonify({'error': 'Missing required fields'}), 400
+
     try:
         with Session() as session:
-            # Check if email already exists
-            query = text("SELECT email FROM users WHERE email = :email")
-            existing_email = session.execute(query, {'email': email}).fetchone()
-
-            if existing_email:
-                return jsonify({'error': 'Email already exists. Please login.'}), 400
+            # Check if email or phone already exists
+            query = text("SELECT email, phone FROM users WHERE email = :email OR phone = :phone")
+            existing_user = session.execute(query, {'email': email, 'phone': phone}).fetchone()
+            if existing_user:
+                return jsonify({'error': 'Email or phone already exists. Please login.'}), 401
             else:
                 # Generate UUID for session
                 uuid = generate_session_id()
@@ -590,11 +590,7 @@ def med_add_data():
                 )
 
                 if email_response.status_code == 200:
-                    # Insert data into organisations table
-                    query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key)")
-                    session.execute(query, {'name': name, 'email': email, 'c_code': c_code, 'phone': phone, 'uuid': uuid, 'license_key': license_key})
-                    session.commit()
-                    return jsonify({'message': 'Data added successfully', 'license_key': license_key}), 200
+                    return jsonify({'message': 'License key sent to email successfully', 'license_key': license_key}), 200
                 else:
                     return jsonify({'error': 'Failed to send email'}), 500
     except Exception as e:
@@ -626,33 +622,25 @@ def med_verify_license_key():
 def med_create_pin():
     data = request.json
     license_key = data.get('license_key')
+    email= data.get('email')
     pin = data.get('pin')
-    auth_header = request.headers.get('Authorization')
-
-    # Check if the Authorization header is present and has the correct format
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'error': 'Invalid Authorization header'}), 401
-
-    # Extract the JWT token from the Authorization header
-    token = auth_header.split(' ')[1]
-
-    try:
-        # Verify the JWT token using the secret key
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
-    except jwt.ExpiredSignatureError:
-        return jsonify({'error': 'Token has expired'}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({'error': 'Invalid token'}), 401
-
     if not pin:
-        return jsonify({'error': 'Missing required fields'}), 400
-
+        return jsonify({'error': 'Missing required fields'}), 401
     try:
         with Session() as session:
-            query = text("UPDATE users SET pin = :pin WHERE licence_key = :license_key")
-            session.execute(query, {'pin': pin, 'license_key': license_key})
+            token = jwt.encode({'email': email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
+            query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key, pin) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :pin)")
+            session.execute(query, {
+                'name': data.get('name'),
+                'email': email,
+                'c_code': data.get('c_code'),
+                'phone': data.get('phone'),
+                'uuid': generate_session_id(),
+                'license_key': license_key,
+                'pin': pin
+            })
             session.commit()
-        return jsonify({'message': 'PIN created successfully'}), 200
+        return jsonify({'message': 'PIN created and data saved successfully', 'token': token}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
