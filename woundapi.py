@@ -67,6 +67,7 @@ def generate_patient_id():
         formatted_id = f"{prefix}000{last_id + 1}"
         return formatted_id
 
+
 @app.route('/add_data', methods=['POST'])
 def add_data():
     data = request.json
@@ -77,14 +78,15 @@ def add_data():
 
     if not (name and email and c_code and phone):
         return jsonify({'error': 'Missing required fields'}), 400
+
     try:
         with Session() as session:
-            # Check if email already exists
-            query = text("SELECT email FROM organisations WHERE email = :email")
-            existing_email = session.execute(query, {'email': email}).fetchone()
+            # Check if email or phone already exists
+            query = text("SELECT email, phone FROM organisations WHERE email = :email OR phone = :phone")
+            existing_user = session.execute(query, {'email': email, 'phone': phone}).fetchone()
 
-            if existing_email:
-                return jsonify({'error': 'Email already exists. Please login.'}), 400
+            if existing_user:
+                return jsonify({'error': 'Email or phone already exists. Please login.'}), 400
             else:
                 # Generate UUID for session
                 uuid = generate_session_id()
@@ -106,11 +108,7 @@ def add_data():
                 )
 
                 if email_response.status_code == 200:
-                    # Insert data into organisations table
-                    query = text("INSERT INTO organisations (name, email, c_code, phone, uuid, licence_key) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key)")
-                    session.execute(query, {'name': name, 'email': email, 'c_code': c_code, 'phone': phone, 'uuid': uuid, 'license_key': license_key})
-                    session.commit()
-                    return jsonify({'message': 'Data added successfully', 'license_key': license_key}), 200
+                    return jsonify({'message': 'License key sent to email successfully', 'license_key': license_key}), 200
                 else:
                     return jsonify({'error': 'Failed to send email'}), 500
     except Exception as e:
@@ -155,6 +153,7 @@ def create_pin():
     try:
         # Verify the JWT token using the secret key
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+        email = payload['email']
     except jwt.ExpiredSignatureError:
         return jsonify({'error': 'Token has expired'}), 401
     except jwt.InvalidTokenError:
@@ -165,10 +164,24 @@ def create_pin():
 
     try:
         with Session() as session:
+            # Update the organisations table with the PIN
             query = text("UPDATE organisations SET pin = :pin WHERE licence_key = :license_key")
             session.execute(query, {'pin': pin, 'license_key': license_key})
+
+            # Save the rest of the data only after the PIN is created
+            query = text("INSERT INTO organisations (name, email, c_code, phone, uuid, licence_key, pin) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :pin)")
+            session.execute(query, {
+                'name': data.get('name'),
+                'email': email,
+                'c_code': data.get('c_code'),
+                'phone': data.get('phone'),
+                'uuid': generate_session_id(),
+                'license_key': license_key,
+                'pin': pin
+            })
             session.commit()
-        return jsonify({'message': 'PIN created successfully'}), 200
+
+        return jsonify({'message': 'PIN created and data saved successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
