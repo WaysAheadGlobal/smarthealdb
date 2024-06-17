@@ -12,31 +12,21 @@ from dotenv import load_dotenv
 from twilio.rest import Client
 import requests
 from werkzeug.utils import secure_filename
-
-
-
 load_dotenv()
-
 app = Flask(__name__)
-
 # Database credentials
-DB_HOST = '103.239.89.99'
-DB_DATABASE = 'SmartHealAppDB'
-DB_USERNAME = 'SmartHealAppUsr'
-DB_PASSWORD = 'I^4y1b12y'
-
-# Create database engine
+DB_HOST = os.getenv('host')
+DB_DATABASE = os.getenv('db')
+DB_USERNAME = os.getenv('username')
+DB_PASSWORD = os.getenv('psswd')
 DATABASE_URL = f"mysql+pymysql://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}/{DB_DATABASE}"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-
-# Create session factory
 Session = sessionmaker(bind=engine)
 
 account_sid = os.getenv('acc_sid')
 auth_token = os.getenv('auth_token')
 twilio_number = os.getenv('tn')
 
-# Secret key used for verifying JWT tokens (should be the same as in your PHP API)
 JWT_SECRET_KEY = 'CkOPcOppyh31sQcisbyOM3RKD4C2G7SzQmuG5LePt9XBarsxgjm0fc7uOECcqoGm'
 
 # Configuration for file uploads
@@ -47,15 +37,12 @@ if not os.path.exists(UPLOAD_FOLDER):
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# Utility function to check allowed file extensions
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 
 def generate_session_id():
     return str(uuid.uuid4())
 
-# Function to generate random license key
 def generate_license_key():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
 
@@ -66,7 +53,6 @@ def generate_patient_id():
         prefix = "AB"  # Your 2 characters prefix
         formatted_id = f"{prefix}000{last_id + 1}"
         return formatted_id
-
 
 @app.route('/send_email', methods=['POST'])
 def add_data():
@@ -975,17 +961,6 @@ def send_otp_org():
         return jsonify({'error': str(e)}), 500
 
 
-def generate_otp():
-    return str(random.randint(1000, 9999))
-
-def send_sms(phone, otp):
-    client = Client(account_sid, auth_token)
-    client.messages.create(
-        body=f"Your verification code is: {otp}. Don't share this code with anyone; our employees will never ask for the code.",
-        from_=twilio_number,
-        to=phone
-    )
-
 def update_otp_in_database(session, phone, otp, expiry_time):
     try:
         # Query to update OTP details
@@ -1218,8 +1193,6 @@ def update_patient_details():
         return jsonify({'error': str(e)}), 500
 
 
-
-
 @app.route('/patient_details', methods=['GET'])
 def get_patient_details():
     data = request.json
@@ -1254,11 +1227,7 @@ def get_patient_details():
                 return jsonify({'error': 'Patient not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
-
-
-# Route to serve uploaded files
+        
 @app.route('/uploads/<patient_id>/<filename>')
 def uploaded_file(patient_id, filename):
     return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], patient_id), filename)
@@ -1325,9 +1294,6 @@ def get_image():
                 return jsonify({'error': 'Image not found for the given patient ID'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
-
 
 # Endpoint to store an image for a wound in the filesystem and save path in the database
 @app.route('/store_wound_image', methods=['POST'])
@@ -1530,5 +1496,3 @@ def get_org_image():
 
 if __name__ == '__main__':
     app.run(debug=False)
-
-
