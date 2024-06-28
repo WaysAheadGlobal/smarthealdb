@@ -1494,6 +1494,25 @@ def get_org_image():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/save_notes', methods=['POST'])
+def save_notes():
+    data = request.json
+    patient_id = data.get('patient_id')
+    notes = data.get('notes')
+
+    if not patient_id or not notes:
+        return jsonify({'error': 'Patient ID and notes are required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("UPDATE patients SET notes = :notes WHERE patient_id = :patient_id")
+            session.execute(query, {'notes': notes, 'patient_id': patient_id})
+            session.commit()
+
+        return jsonify({'message': 'Notes saved successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=False)
