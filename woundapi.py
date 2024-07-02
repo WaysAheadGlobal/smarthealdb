@@ -313,7 +313,6 @@ def get_all_patient_details():
         return jsonify({'error': str(e)}), 500
 
     
-
 @app.route('/add_patient', methods=['POST'])
 def add_patient():
     # Get data from request
@@ -338,14 +337,20 @@ def add_patient():
         return jsonify({'error': 'Token has expired'}), 401
     except jwt.InvalidTokenError:
         return jsonify({'error':'Invalid Token'}), 401
+    
+    # Set created_at, updated_at, and scheduled_date
+    created_at = datetime.now() 
+    updated_at = datetime.now()
+    scheduled_date = None  # Set this appropriately as per your application logic
+
 
     try:
         with Session() as session:
             uuid = generate_session_id()
-            pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, uuid, patient_id) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :uuid, :patient_id)")
-            session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'uuid': uuid, 'patient_id': patient_id})
-            wound_query = text("INSERT INTO wounds ( uuid, patient_id) VALUES (:uuid, :patient_id)")
-            session.execute(wound_query, {'uuid': uuid, 'patient_id': patient_id})
+            pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
+            session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
+            wound_query = text("INSERT INTO wounds ( uuid, patient_id, created_at, updated_at) VALUES (:uuid, :patient_id, :created_at, :updated_at)")
+            session.execute(wound_query, {'uuid': uuid, 'patient_id': patient_id,  'created_at': created_at, 'updated_at': updated_at})
             # Commit the transaction to insert data into the database
             session.commit()
         return jsonify({'message': 'Patient added successfully', 'patient_id': patient_id})
