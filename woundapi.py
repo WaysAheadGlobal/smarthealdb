@@ -1172,10 +1172,10 @@ def med_details():
 def update_patient_details():
     data = request.json
     patient_id = data.get('patient_id')
-    allergies = data.get('allergies')
-    past_history = data.get('past_history')
+    allergies = data.get('allergies').split(", ")
+    past_history = data.get('past_history').split(", ")
     doctor_name = data.get('doctor_name')
-    care_facilities = data.get('care_facilities')
+    care_facilities = data.get('care_facilities').split(", ")
 
     if not patient_id:
         return jsonify({'error': 'Patient ID parameter is required'}), 400
@@ -1187,7 +1187,7 @@ def update_patient_details():
                 SET allergy = :allergies, illness = :past_history, doctor = :doctor_name, org = :care_facilities
                 WHERE patient_id = :patient_id
             """)
-            session.execute(query, {'allergies': allergies, 'past_history': past_history, 'doctor_name': doctor_name, 'care_facilities': care_facilities, 'patient_id': patient_id})
+            session.execute(query, {'allergies': json.dumps(allergies), 'past_history': json.dumps(past_history), 'doctor_name': doctor_name, 'care_facilities': json.dumps(care_facilities), 'patient_id': patient_id})
             session.commit()
 
             return jsonify({'message': 'Patient details updated successfully'}), 200
