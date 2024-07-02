@@ -13,7 +13,7 @@ from twilio.rest import Client
 import requests
 from werkzeug.utils import secure_filename
 load_dotenv()
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/static', static_folder='uploads')
 # Database credentials
 DB_HOST = os.getenv('host')
 DB_DATABASE = os.getenv('db')
@@ -35,8 +35,10 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+BASE_URL = 'https://api.smartheal.waysdatalabs.com'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
+# Utility function to check allowed file extensions
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -1228,26 +1230,18 @@ def get_patient_details():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
-@app.route('/uploads/<patient_id>/<filename>')
-def uploaded_file(patient_id, filename):
-    return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], patient_id), filename)
-
-
 
 @app.route('/store_image', methods=['POST'])
 def store_image():
-    # Check if request contains image data
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image provided'}), 400
+    if 'image' not in request.files or 'patient_id' not in request.form:
+        return jsonify({'error': 'No image or patient_id provided'}), 400
 
     image_file = request.files['image']
-    patient_id = request.form.get('patient_id')
+    patient_id = request.form['patient_id']
 
-    # Check if image file is empty
-    if image_file.filename == '' or not patient_id:
-        return jsonify({'error': 'Empty filename or patient ID provided'}), 400
+    if image_file.filename == '':
+        return jsonify({'error': 'Empty filename provided'}), 400
 
-    # Generate a unique filename for the image
     filename = secure_filename(image_file.filename)
 
     try:
@@ -1260,18 +1254,25 @@ def store_image():
         image_file.save(image_path)
 
         # Construct full URL for the image
-        base_url = request.host_url
-        full_image_url = base_url + 'static/' + os.path.relpath(image_path, start=app.config['UPLOAD_FOLDER'])
+        image_url = f"{BASE_URL}/uploads/patients/{patient_id}/{filename}"
 
-        # Update the database with the full image URL
+         # Update the database with the image URL
         with Session() as session:
             query = text("UPDATE patients SET profile_photo_path = :image_url WHERE patient_id = :patient_id")
-            session.execute(query, {'image_url': full_image_url, 'patient_id': patient_id})
+            session.execute(query, {'image_url': image_url, 'patient_id': patient_id})
             session.commit()
 
-        return jsonify({'message': 'Image stored and URL updated successfully', 'image_url': full_image_url}), 200
+        return jsonify({
+            'message': 'Image stored successfully',
+            'image_url': image_url
+        }), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/uploads/patients/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'patients'), filename)
 
 
 # Endpoint to retrieve and serve the image using patient_id
@@ -1289,60 +1290,64 @@ def get_image():
             result = session.execute(query, {'patient_id': patient_id}).fetchone()
 
             if result and result.profile_photo_path:
-                # Extract the relative file path from the stored URL
+                # Parse the full URL to get the filename and patient_id
                 image_url = result.profile_photo_path
-                image_path = os.path.join(app.config['UPLOAD_FOLDER'], os.path.relpath(image_url, start=request.host_url))
-                
-                # Ensure the image path is within the UPLOAD_FOLDER
-                if not image_path.startswith(app.config['UPLOAD_FOLDER']):
-                    return jsonify({'error': 'Invalid image path'}), 400
-                
-                # Send the image file from the determined path
-                return send_from_directory(os.path.dirname(image_path), os.path.basename(image_path))
+                filename = image_url.split('/')[-1]
+
+                # Send the image file from the patient's folder
+                return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'patients', patient_id), filename)
             else:
                 return jsonify({'error': 'Image not found for the given patient ID'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Endpoint to store an image for a wound in the filesystem and save path in the database
+
+
 @app.route('/store_wound_image', methods=['POST'])
 def store_wound_image():
-    # Check if request contains image data
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image provided'}), 400
+    if 'image' not in request.files or 'patient_id' not in request.form:
+        return jsonify({'error': 'No image or patient_id provided'}), 400
 
     image_file = request.files['image']
-    patient_id = request.form.get('patient_id')
+    patient_id = request.form['patient_id']
 
-    # Check if image file is empty
-    if image_file.filename == '' or not patient_id:
-        return jsonify({'error': 'Empty filename or patient ID provided'}), 400
+    if image_file.filename == '':
+        return jsonify({'error': 'Empty filename provided'}), 400
 
-    # Generate a unique filename for the image
     filename = secure_filename(image_file.filename)
 
     try:
-        # Create wounds folder if it doesn't exist
-        wounds_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'wounds')
-        os.makedirs(wounds_folder, exist_ok=True)
-
-        # Create patient folder inside wounds folder if it doesn't exist
-        patient_folder = os.path.join(wounds_folder, patient_id)
+        # Create patient folder if it doesn't exist
+        patient_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'wounds', patient_id)
         os.makedirs(patient_folder, exist_ok=True)
 
         # Save image to the filesystem
         image_path = os.path.join(patient_folder, filename)
         image_file.save(image_path)
 
-        # Update the database with the image path
+        # Construct full URL for the image
+        image_url = f"{BASE_URL}/uploads/wounds/{patient_id}/{filename}"
+
+        # Update the database with the image URL
         with Session() as session:
-            query = text("UPDATE wounds SET image = :image_path WHERE patient_id = :patient_id")
-            session.execute(query, {'image_path': image_path, 'patient_id': patient_id})
+            query = text("UPDATE wounds SET image = :image_url WHERE patient_id = :patient_id")
+            session.execute(query, {'image_url': image_url, 'patient_id': patient_id})
             session.commit()
 
-        return jsonify({'message': 'Image stored and path updated successfully', 'image_path': image_path}), 200
+        print(f"Image stored successfully: {image_url}")
+
+        return jsonify({
+            'message': 'Image stored successfully',
+            'image_url': image_url
+        }), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/uploads/wounds/<patient_id>/<filename>')
+def wound_uploaded_file(patient_id, filename):
+    return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'wounds', patient_id), filename)
+
 
 
 # Endpoint to retrieve and serve the image for a wound using patient_id
@@ -1360,9 +1365,10 @@ def get_wound_image():
             result = session.execute(query, {'patient_id': patient_id}).fetchone()
 
             if result and result.image:
-                # Extract filename from the stored path
-                filename = os.path.basename(result.image)
-                
+                # Parse the full URL to get the filename and patient_id
+                image_url = result.image
+                filename = image_url.split('/')[-1]
+
                 # Send the image file from the patient's folder
                 return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'wounds', patient_id), filename)
             else:
@@ -1374,7 +1380,7 @@ def get_wound_image():
 
 
 
-# Endpoint to store an image for a medical practitioner in the filesystem and save path in the database
+
 @app.route('/store_med_image', methods=['POST'])
 def store_med_image():
     # Check if request contains image data
@@ -1399,14 +1405,24 @@ def store_med_image():
         # Save image to the filesystem
         image_path = os.path.join(med_practitioner_folder, filename)
         image_file.save(image_path)
+        
+        # Construct full URL for the image
+        image_url = f"{BASE_URL}/uploads/medical_practitioners/{email}/{filename}"
 
         # Update the database with the image path
         with Session() as session:
-            query = text("UPDATE users SET profile_photo_path = :image_path WHERE email = :email")
-            session.execute(query, {'image_path': image_path, 'email': email})
+            query = text("UPDATE users SET profile_photo_path = :image_url WHERE email = :email")
+            session.execute(query, {'image_url': image_url, 'email': email})
             session.commit()
 
-        return jsonify({'message': 'Image stored and path updated successfully', 'image_path': image_path}), 200
+        return jsonify({'message': 'Image stored and path updated successfully', 'image_url': image_url}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/uploads/medical_practitioners/<email>/<filename>')
+def med_uploaded_file(email, filename):
+    try:
+        return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'medical_practitioners', email), filename)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1427,8 +1443,9 @@ def get_med_image():
             result = session.execute(query, {'email': email}).fetchone()
 
             if result and result.profile_photo_path:
-                # Extract filename from the stored path
-                filename = os.path.basename(result.profile_photo_path)
+                # Parse the full URL to get the filename and patient_id
+                image_url = result.profile_photo_path
+                filename = image_url.split('/')[-1]
                 
                 # Send the image file from the medical practitioner's folder
                 return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'medical_practitioners', email), filename)
@@ -1440,7 +1457,7 @@ def get_med_image():
 
 
 
-# Endpoint to store an image for a organisations in the filesystem and save path in the database
+# Endpoint to store an image for a medical practitioner in the filesystem and save path in the database
 @app.route('/store_org_image', methods=['POST'])
 def store_org_image():
     # Check if request contains image data
@@ -1459,26 +1476,37 @@ def store_org_image():
 
     try:
         # Create medical practitioner folder if it doesn't exist
-        med_practitioner_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'organisations', email)
-        os.makedirs(med_practitioner_folder, exist_ok=True)
+        org_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'organisations', email)
+        os.makedirs(org_folder, exist_ok=True)
 
         # Save image to the filesystem
-        image_path = os.path.join(med_practitioner_folder, filename)
+        image_path = os.path.join(org_folder, filename)
         image_file.save(image_path)
+        
+        # Construct full URL for the image
+        image_url = f"{BASE_URL}/uploads/organisations/{email}/{filename}"
 
         # Update the database with the image path
         with Session() as session:
-            query = text("UPDATE organisations SET profile_photo_path = :image_path WHERE email = :email")
-            session.execute(query, {'image_path': image_path, 'email': email})
+            query = text("UPDATE organisations SET profile_photo_path = :image_url WHERE email = :email")
+            session.execute(query, {'image_url': image_url, 'email': email})
             session.commit()
 
-        return jsonify({'message': 'Image stored and path updated successfully', 'image_path': image_path}), 200
+        return jsonify({'message': 'Image stored and path updated successfully', 'image_url': image_url}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/uploads/organisations/<email>/<filename>')
+def org_uploaded_fil(email, filename):
+    try:
+        # Serve the image file from the organization's folder
+        return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'organisations', email), filename)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 
-# Endpoint to retrieve and serve the image for a organisation using email
+# Endpoint to retrieve and serve the image for a medical practitioner using email
 @app.route('/get_org_image', methods=['GET'])
 def get_org_image():
     data = request.json
@@ -1493,8 +1521,9 @@ def get_org_image():
             result = session.execute(query, {'email': email}).fetchone()
 
             if result and result.profile_photo_path:
-                # Extract filename from the stored path
-                filename = os.path.basename(result.profile_photo_path)
+                # Parse the full URL to get the filename and patient_id
+                image_url = result.profile_photo_path
+                filename = image_url.split('/')[-1]
                 
                 # Send the image file from the medical practitioner's folder
                 return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'organisations', email), filename)
