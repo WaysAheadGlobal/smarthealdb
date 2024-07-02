@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, url_for
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import pymysql
@@ -1233,7 +1233,7 @@ def uploaded_file(patient_id, filename):
     return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], patient_id), filename)
 
 
-# Endpoint to store an image in the filesystem and save path in the database
+
 @app.route('/store_image', methods=['POST'])
 def store_image():
     # Check if request contains image data
@@ -1259,13 +1259,17 @@ def store_image():
         image_path = os.path.join(patient_folder, filename)
         image_file.save(image_path)
 
-        # Update the database with the image path
+        # Construct full URL for the image
+        base_url = request.host_url
+        full_image_url = base_url + 'static/' + os.path.relpath(image_path, start=app.config['UPLOAD_FOLDER'])
+
+        # Update the database with the full image URL
         with Session() as session:
-            query = text("UPDATE patients SET profile_photo_path = :image_path WHERE patient_id = :patient_id")
-            session.execute(query, {'image_path': image_path, 'patient_id': patient_id})
+            query = text("UPDATE patients SET profile_photo_path = :image_url WHERE patient_id = :patient_id")
+            session.execute(query, {'image_url': full_image_url, 'patient_id': patient_id})
             session.commit()
 
-        return jsonify({'message': 'Image stored and path updated successfully', 'image_path': image_path}), 200
+        return jsonify({'message': 'Image stored and URL updated successfully', 'image_url': full_image_url}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1285,11 +1289,16 @@ def get_image():
             result = session.execute(query, {'patient_id': patient_id}).fetchone()
 
             if result and result.profile_photo_path:
-                # Extract filename from the stored path
-                filename = os.path.basename(result.profile_photo_path)
+                # Extract the relative file path from the stored URL
+                image_url = result.profile_photo_path
+                image_path = os.path.join(app.config['UPLOAD_FOLDER'], os.path.relpath(image_url, start=request.host_url))
                 
-                # Send the image file from the patient's folder
-                return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'patients', patient_id), filename)
+                # Ensure the image path is within the UPLOAD_FOLDER
+                if not image_path.startswith(app.config['UPLOAD_FOLDER']):
+                    return jsonify({'error': 'Invalid image path'}), 400
+                
+                # Send the image file from the determined path
+                return send_from_directory(os.path.dirname(image_path), os.path.basename(image_path))
             else:
                 return jsonify({'error': 'Image not found for the given patient ID'}), 404
     except Exception as e:
