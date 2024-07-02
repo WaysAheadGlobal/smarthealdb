@@ -1256,6 +1256,7 @@ def get_patient_details():
                     'past_history': patient_result.illness,
                     'doctor_name': patient_result.doctor,
                     'care_facilities': patient_result.org,
+                    'register_date': patient_result.created_at,
                     'wound_details': wound_details
                 }
                 return jsonify(patient_details), 200
