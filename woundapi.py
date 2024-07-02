@@ -1205,24 +1205,53 @@ def get_patient_details():
 
     try:
         with Session() as session:
-            query = text("""
+            # Query to get patient details
+            patient_query = text("""
                 SELECT *
                 FROM patients
                 WHERE patient_id = :patient_id
             """)
-            result = session.execute(query, {'patient_id': patient_id}).fetchone()
+            patient_result = session.execute(patient_query, {'patient_id': patient_id}).fetchone()
 
-            if result:
+            if patient_result:
+                # Query to get all wound details
+                wound_query = text("""
+                    SELECT *
+                    FROM wounds
+                    WHERE patient_id = :patient_id
+                """)
+                wound_results = session.execute(wound_query, {'patient_id': patient_id}).fetchall()
+
+                # Convert wound results to a list of dictionaries
+                wound_details = [
+                    {
+                        'length': wound.height,
+                        'breadth': wound.width,
+                        'depth': wound.depth,
+                        'area': wound.area,
+                        'wound_location': wound.position,
+                        'tissue': wound.tissue,
+                        'exudate': wound.exudate,
+                        'periwound':wound.periwound,
+                        'periwound_type': wound.periwound_type,
+                        'image': wound.image,
+                        'moisture': wound.moisture
+                    } for wound in wound_results
+                ]
+
+                # Combine patient and wound details
                 patient_details = {
-                    'patient_id': result.patient_id,
-                    'name': result.name,
-                    'age': result.age,
-                    'gender': result.gender,
-                    'dob': result.dob,
-                    'allergies': result.allergy,
-                    'past_history': result.illness,
-                    'doctor_name': result.doctor,
-                    'care_facilities': result.org
+                    'patient_id': patient_result.patient_id,
+                    'name': patient_result.name,
+                    'age': patient_result.age,
+                    'gender': patient_result.gender,
+                    'dob': patient_result.dob,
+                    'profile_photo_path': patient_result.profile_photo_path,
+                    'allergies': patient_result.allergy,
+                    'past_history': patient_result.illness,
+                    'doctor_name': patient_result.doctor,
+                    'care_facilities': patient_result.org,
+                    'wound_details': wound_details
                 }
                 return jsonify(patient_details), 200
             else:
