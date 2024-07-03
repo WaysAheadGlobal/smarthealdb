@@ -512,7 +512,8 @@ def send_otp():
 
             if organisation:
                 phone_with_code = organisation.c_code + organisation.phone
-                otp = generate_otp()
+                #otp = generate_otp()
+                otp=123
                 #send_sms(phone_with_code, otp)
 
                 # Update OTP details in database
