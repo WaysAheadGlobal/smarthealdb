@@ -133,10 +133,15 @@ def create_pin():
     pin = data.get('pin')
     if not pin:
         return jsonify({'error': 'Missing required fields'}), 401
+
+    # Set created_at, updated_at, and scheduled_date
+    created_at = datetime.now() 
+    updated_at = datetime.now()
+    
     try:
         with Session() as session:
             token = jwt.encode({'email': email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
-            query = text("INSERT INTO organisations (name, email, c_code, phone, uuid, licence_key, pin) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :pin)")
+            query = text("INSERT INTO organisations (name, email, c_code, phone, uuid, licence_key, pin, created_at, updated_at) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :pin, :created_at, :updated_at)")
             session.execute(query, {
                 'name': data.get('name'),
                 'email': email,
@@ -144,7 +149,9 @@ def create_pin():
                 'phone': data.get('phone'),
                 'uuid': generate_session_id(),
                 'license_key': license_key,
-                'pin': pin
+                'pin': pin,
+                'created_at': created_at,
+                'updated_at': updated_at
             })
             session.commit()
         return jsonify({'message': 'PIN created and data saved successfully', 'token': token}), 200
@@ -620,10 +627,13 @@ def med_create_pin():
     pin = data.get('pin')
     if not pin:
         return jsonify({'error': 'Missing required fields'}), 401
+    # Set created_at, updated_at, and scheduled_date
+    created_at = datetime.now() 
+    updated_at = datetime.now()
     try:
         with Session() as session:
             token = jwt.encode({'email': email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
-            query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key, pin) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :pin)")
+            query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key, pin, created_at, updated_at) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :pin, :created_at, :updated_at)")
             session.execute(query, {
                 'name': data.get('name'),
                 'email': email,
@@ -631,7 +641,10 @@ def med_create_pin():
                 'phone': data.get('phone'),
                 'uuid': generate_session_id(),
                 'license_key': license_key,
-                'pin': pin
+                'pin': pin,
+                'created_at': created_at,
+                'updated_at': updated_at
+                
             })
             session.commit()
         return jsonify({'message': 'PIN created and data saved successfully', 'token': token}), 200
