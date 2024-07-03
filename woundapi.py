@@ -513,7 +513,7 @@ def send_otp():
             if organisation:
                 phone_with_code = organisation.c_code + organisation.phone
                 otp = generate_otp()
-                send_sms(phone_with_code, otp)
+                #send_sms(phone_with_code, otp)
 
                 # Update OTP details in database
                 expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
