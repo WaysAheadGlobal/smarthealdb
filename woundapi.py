@@ -517,10 +517,10 @@ def send_otp():
                 send_sms(phone_with_code, otp)
 
                 # Update OTP details in database
-                expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+                expiry_time = datetime.now() + datetime.timedelta(minutes=5)
                 update_otp_in_database(session, phone, otp, expiry_time)
                 
-                token = jwt.encode({'email': organisation.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
+                token = jwt.encode({'email': organisation.email, 'exp': datetime.now() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
                 return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email}), 200
             else:
                 return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
