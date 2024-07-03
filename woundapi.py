@@ -342,7 +342,7 @@ def add_patient():
     # Set created_at, updated_at, and scheduled_date
     created_at = datetime.now() 
     updated_at = datetime.now()
-    scheduled_date = None  # Set this appropriately as per your application logic
+    scheduled_date = datetime.now()  # Set this appropriately as per your application logic
 
 
     try:
