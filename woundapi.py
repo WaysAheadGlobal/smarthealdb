@@ -320,6 +320,7 @@ def get_all_patient_details():
         return jsonify({'error': str(e)}), 500
 
     
+
 @app.route('/add_patient', methods=['POST'])
 def add_patient():
     # Get data from request
@@ -331,6 +332,7 @@ def add_patient():
     height = data.get('height')
     weight = data.get('weight')
     email = data.get('email')
+    doctor = data.get('doctor')
     patient_id = generate_patient_id()
     auth_header = request.headers.get('Authorization')
 
@@ -354,8 +356,8 @@ def add_patient():
     try:
         with Session() as session:
             uuid = generate_session_id()
-            pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
-            session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
+            pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, doctor, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :doctor, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
+            session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'doctor': doctor, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
             wound_query = text("INSERT INTO wounds ( uuid, patient_id, created_at, updated_at) VALUES (:uuid, :patient_id, :created_at, :updated_at)")
             session.execute(wound_query, {'uuid': uuid, 'patient_id': patient_id,  'created_at': created_at, 'updated_at': updated_at})
             # Commit the transaction to insert data into the database
@@ -820,15 +822,16 @@ def update_scheduled_date():
     data = request.json
     email = data.get('email')
     patient_id = data.get('patient_id')
+    doctor = data.get('doctor')
     scheduled_date = data.get('scheduled_date')
 
-    if not (email and patient_id and scheduled_date):
+    if not (email and patient_id and scheduled_date and doctor):
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
         with Session() as session:
-            query = text("UPDATE patients SET scheduled_date = :scheduled_date WHERE email = :email AND patient_id = :patient_id")
-            result = session.execute(query, {'scheduled_date': scheduled_date, 'email': email, 'patient_id': patient_id})
+            query = text("UPDATE patients SET scheduled_date = :scheduled_date WHERE email = :email AND patient_id = :patient_id AND doctor = :doctor")
+            result = session.execute(query, {'scheduled_date': scheduled_date, 'email': email, 'patient_id': patient_id, 'doctor': doctor})
             session.commit()
 
             if result.rowcount == 0:
@@ -1193,7 +1196,6 @@ def update_patient_details():
     patient_id = data.get('patient_id')
     allergies = data.get('allergies').split(", ")
     past_history = data.get('past_history').split(", ")
-    doctor_name = data.get('doctor_name')
     care_facilities = data.get('care_facilities').split(", ")
 
     if not patient_id:
@@ -1203,10 +1205,10 @@ def update_patient_details():
         with Session() as session:
             query = text("""
                 UPDATE patients
-                SET allergy = :allergies, illness = :past_history, doctor = :doctor_name, org = :care_facilities
+                SET allergy = :allergies, illness = :past_history, org = :care_facilities
                 WHERE patient_id = :patient_id
             """)
-            session.execute(query, {'allergies': json.dumps(allergies), 'past_history': json.dumps(past_history), 'doctor_name': doctor_name, 'care_facilities': json.dumps(care_facilities), 'patient_id': patient_id})
+            session.execute(query, {'allergies': json.dumps(allergies), 'past_history': json.dumps(past_history), 'care_facilities': json.dumps(care_facilities), 'patient_id': patient_id})
             session.commit()
 
             return jsonify({'message': 'Patient details updated successfully'}), 200
@@ -1605,25 +1607,32 @@ def total_appointments():
     data = request.json
     start_date_str = data.get('start_date')
     end_date_str = data.get('end_date')
+    doctor = data.get('doctor')
 
-    if not (start_date_str and end_date_str):
-        return jsonify({'error': 'Start date and end date parameters are required'}), 400
+    if not (start_date_str and end_date_str and doctor):
+        return jsonify({'error': 'Start date, end date, and doctor name parameters are required'}), 400
 
     try:
         start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d')
         end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d')
-
+        
+        
         with Session() as session:
             query = text("""
                 SELECT DATE(scheduled_date) as date, COUNT(*) as total_appointments
                 FROM patients
                 WHERE scheduled_date BETWEEN :start_date AND :end_date
+                AND doctor = :doctor
                 GROUP BY DATE(scheduled_date)
                 ORDER BY DATE(scheduled_date)
             """)
 
             # Execute query
-            results = session.execute(query, {'start_date': start_date, 'end_date': end_date}).fetchall()
+            results = session.execute(query, {
+                'start_date': start_date,
+                'end_date': end_date,
+                'doctor': doctor
+            }).fetchall()
 
             appointments_by_day = {}
 
