@@ -523,7 +523,7 @@ def send_otp():
                 update_otp_in_database(session, phone, otp, expiry_time)
                 
                 token = jwt.encode({'email': organisation.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
-                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email, 'org_name': organisation.name}), 200
+                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email, 'name': organisation.name}), 200
             else:
                 return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
     except Exception as e:
@@ -786,7 +786,7 @@ def med_send_otp():
                 update_otp_in_database(session, phone, otp, expiry_time)
                 
                 token = jwt.encode({'email': user.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, JWT_SECRET_KEY, algorithm='HS256')
-                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': user.email, 'doctor_name': user.name}), 200
+                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': user.email, 'name': user.name}), 200
             else:
                 return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
     except Exception as e:
