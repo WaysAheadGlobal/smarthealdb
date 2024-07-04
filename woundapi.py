@@ -775,7 +775,7 @@ def med_send_otp():
             query = text("SELECT * FROM users WHERE phone = :phone")
             user = session.execute(query, {'phone': phone}).fetchone()
 
-            if organisation:
+            if user:
                 phone_with_code = user.c_code + user.phone
                 #otp = generate_otp()
                 otp="1234"
