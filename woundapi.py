@@ -523,7 +523,7 @@ def send_otp():
                 update_otp_in_database(session, phone, otp, expiry_time)
                 
                 token = jwt.encode({'email': organisation.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
-                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email}), 200
+                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email, 'doctor_name': oraganisation.name}), 200
             else:
                 return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
     except Exception as e:
@@ -776,16 +776,17 @@ def med_send_otp():
             organisation = session.execute(query, {'phone': phone}).fetchone()
 
             if organisation:
-                phone_with_code = organisation.c_code + organisation.phone
-                otp = generate_otp()
-                send_sms(phone_with_code, otp)
+                phone_with_code = users.c_code + users.phone
+                #otp = generate_otp()
+                otp="1234"
+                #send_sms(phone_with_code, otp)
 
                 # Update OTP details in database
                 expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
                 update_otp_in_database(session, phone, otp, expiry_time)
                 
-                token = jwt.encode({'email': organisation.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, JWT_SECRET_KEY, algorithm='HS256')
-                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email}), 200
+                token = jwt.encode({'email': users.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, JWT_SECRET_KEY, algorithm='HS256')
+                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': user.email, 'doctor_name': users.name}), 200
             else:
                 return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
     except Exception as e:
