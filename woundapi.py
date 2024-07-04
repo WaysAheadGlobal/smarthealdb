@@ -523,7 +523,7 @@ def send_otp():
                 update_otp_in_database(session, phone, otp, expiry_time)
                 
                 token = jwt.encode({'email': organisation.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
-                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email, 'doctor_name': organisation.name}), 200
+                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email, 'org_name': organisation.name}), 200
             else:
                 return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
     except Exception as e:
@@ -773,10 +773,10 @@ def med_send_otp():
         with Session() as session:
             # Fetch professional details from the database
             query = text("SELECT * FROM users WHERE phone = :phone")
-            organisation = session.execute(query, {'phone': phone}).fetchone()
+            user = session.execute(query, {'phone': phone}).fetchone()
 
             if organisation:
-                phone_with_code = users.c_code + users.phone
+                phone_with_code = user.c_code + user.phone
                 #otp = generate_otp()
                 otp="1234"
                 #send_sms(phone_with_code, otp)
@@ -785,8 +785,8 @@ def med_send_otp():
                 expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
                 update_otp_in_database(session, phone, otp, expiry_time)
                 
-                token = jwt.encode({'email': users.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, JWT_SECRET_KEY, algorithm='HS256')
-                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': user.email, 'doctor_name': users.name}), 200
+                token = jwt.encode({'email': user.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, JWT_SECRET_KEY, algorithm='HS256')
+                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': user.email, 'doctor_name': user.name}), 200
             else:
                 return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
     except Exception as e:
