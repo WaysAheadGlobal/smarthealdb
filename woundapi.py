@@ -271,14 +271,19 @@ def add_wound_details():
     periwound = data.get('periwound')
     periwound_type = data.get('periwound_type')
     patient_id = data.get('patient_id') 
+    type = data.get('type')
+    category = data.get('category')
+    edge = data.get('edge')
+    infection = data.get('infection')
+    last_dressing_date = data.get('last_dressing_date')
 
     if not (length and breadth and depth and area and moisture):
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
         with Session() as session:
-            query = text("UPDATE wounds SET height = :length, width = :breadth, depth = :depth, area = :area, moisture = :moisture, position = :wound_location, tissue = :tissue, exudate = :exudate, periwound = :periwound, periwound_type = :periwound_type WHERE patient_id = :patient_id;")
-            session.execute(query, {'length': length, 'breadth': breadth, 'depth': depth, 'area': area, 'moisture': moisture, 'wound_location': wound_location, 'tissue': tissue, 'exudate': exudate, 'periwound': periwound, 'periwound_type': periwound_type, 'patient_id': patient_id})
+            query = text("UPDATE wounds SET height = :length, width = :breadth, depth = :depth, area = :area, moisture = :moisture, position = :wound_location, tissue = :tissue, exudate = :exudate, periwound = :periwound, periwound_type = :periwound_type, type = :type, category = :category, edges = :edge, infection = :infection, last_dressing = :last_dressing_date WHERE patient_id = :patient_id;")
+            session.execute(query, {'length': length, 'breadth': breadth, 'depth': depth, 'area': area, 'moisture': moisture, 'wound_location': wound_location, 'tissue': tissue, 'exudate': exudate, 'periwound': periwound, 'periwound_type': periwound_type, 'type': type, 'category': category, 'edge': edge, 'infection': infection, 'last_dressing_date': last_dressing_date, 'patient_id': patient_id})
             session.commit()
             return jsonify({'message': 'Wound details added successfully'}), 200
     except Exception as e:
