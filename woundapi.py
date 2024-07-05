@@ -11,7 +11,6 @@ import uuid
 from dotenv import load_dotenv
 from twilio.rest import Client
 import requests
-import json
 from werkzeug.utils import secure_filename
 load_dotenv()
 app = Flask(__name__, static_url_path='/static', static_folder='uploads')
@@ -1196,9 +1195,9 @@ def med_details():
 def update_patient_details():
     data = request.json
     patient_id = data.get('patient_id')
-    allergies = data.get('allergies').split(", ")
-    past_history = data.get('past_history').split(", ")
-    care_facilities = data.get('care_facilities').split(", ")
+    allergies = data.get('allergies')
+    past_history = data.get('past_history')
+    care_facilities = data.get('care_facilities')
 
     if not patient_id:
         return jsonify({'error': 'Patient ID parameter is required'}), 400
@@ -1210,7 +1209,12 @@ def update_patient_details():
                 SET allergy = :allergies, illness = :past_history, org = :care_facilities
                 WHERE patient_id = :patient_id
             """)
-            session.execute(query, {'allergies': json.dumps(allergies), 'past_history': json.dumps(past_history), 'care_facilities': json.dumps(care_facilities), 'patient_id': patient_id})
+            session.execute(query, {
+                'allergies': allergies, 
+                'past_history': past_history, 
+                'care_facilities': care_facilities, 
+                'patient_id': patient_id
+            })
             session.commit()
 
             return jsonify({'message': 'Patient details updated successfully'}), 200
