@@ -11,6 +11,7 @@ import uuid
 from dotenv import load_dotenv
 from twilio.rest import Client
 import requests
+import json
 from werkzeug.utils import secure_filename
 load_dotenv()
 app = Flask(__name__, static_url_path='/static', static_folder='uploads')
