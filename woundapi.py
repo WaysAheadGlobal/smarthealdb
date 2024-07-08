@@ -1666,7 +1666,7 @@ def total_appointments():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/add_practitioner', methods=['POST'])
+@app.route('/admin_add_practitioner', methods=['POST'])
 def add_practitioner():
     data = request.json
     name = data.get('name')
