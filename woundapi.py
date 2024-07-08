@@ -1016,7 +1016,7 @@ def organisation_details():
             # Query to fetch organisation details and count of email occurrences in patients table
             query = text("""
                 SELECT o.name, o.departments, o.location, o.latitude, o.longitude, o.about,
-                    COUNT(p.email) as patient_count
+                    o.profile_photo_path, COUNT(p.email) as patient_count
                 FROM organisations o
                 LEFT JOIN patients p ON o.email = p.email
                 WHERE o.email = :email
@@ -1031,6 +1031,7 @@ def organisation_details():
                     'latitude': result.latitude,
                     'longitude': result.longitude,
                     'about': result.about,
+                    'profile_photo_path': result.profile_photo_path,
                     'patient_count': result.patient_count
                 }
                 return jsonify(response), 200
@@ -1170,7 +1171,7 @@ def med_details():
             # Query to fetch organisation details and count of email occurrences in patients table
             query = text("""
                 SELECT o.name, o.departments, o.location, o.latitude, o.longitude, o.about,
-                    COUNT(p.email) as patient_count
+                    o.profile_photo_path, COUNT(p.email) as patient_count
                 FROM users o
                 LEFT JOIN patients p ON o.email = p.email
                 WHERE o.email = :email
@@ -1185,6 +1186,7 @@ def med_details():
                     'latitude': result.latitude,
                     'longitude': result.longitude,
                     'about': result.about,
+                    'profile_photo_path': result.profile_photo_path,
                     'patient_count': result.patient_count
                 }
                 return jsonify(response), 200
@@ -1661,6 +1663,46 @@ def total_appointments():
 
             return jsonify({'appointments_by_day': appointments_by_day}), 200
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/add_practitioner', methods=['POST'])
+def add_practitioner():
+    data = request.json
+    name = data.get('name')
+    email = data.get('email')
+    c_code = data.get('c_code')
+    phone = data.get('phone')
+
+    if not (name and email and c_code and phone):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Check if email already exists
+            query = text("SELECT email FROM users WHERE email = :email")
+            existing_email = session.execute(query, {'email': email}).fetchone()
+
+            if existing_email:
+                return jsonify({'error': 'Email already exists. Please login.'}), 400
+            else:
+                # Generate UUID for session
+                uuid = generate_session_id()
+                # Generate license key
+                license_key = generate_license_key()
+
+                # Insert data into organisations table
+                query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key)")
+                session.execute(query, {
+                    'name': name, 
+                    'email': email, 
+                    'c_code': c_code, 
+                    'phone': phone, 
+                    'uuid': uuid, 
+                    'license_key': license_key
+                })
+                session.commit()
+                return jsonify({'message': 'Data added successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
