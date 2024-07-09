@@ -1714,5 +1714,104 @@ def add_practitioner():
         return jsonify({'error': str(e)}), 500
 
 
+# Endpoint to update organisation profile
+@app.route('/update_org_profile', methods=['POST'])
+def update_org_profile():
+    data = request.json
+    name = data.get('name')
+    department = data.get('department')
+    about = data.get('about')
+    location = data.get('location')
+    latitude = data.get('latitude')
+    longitude = data.get('longitude')
+    email = data.get('email')
+
+    if not (name and department and about and location and latitude and longitude and email):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Check if organisation exists
+            query = text("SELECT email FROM organisations WHERE email = :email")
+            existing_org = session.execute(query, {'email': email}).fetchone()
+
+            if not existing_org:
+                return jsonify({'error': 'Organisation not found'}), 404
+
+            # Update organisation profile
+            update_query = text("""
+                UPDATE organisations
+                SET name = :name,
+                    departments = :department,
+                    about = :about,
+                    location = :location,
+                    latitude = :latitude,
+                    longitude = :longitude
+                WHERE email = :email
+            """)
+            session.execute(update_query, {
+                'name': name,
+                'department': department,
+                'about': about,
+                'location': location,
+                'latitude': latitude,
+                'longitude': longitude,
+                'email': email
+            })
+            session.commit()
+            return jsonify({'message': 'Organisation profile updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to update medical profile
+@app.route('/update_med_profile', methods=['POST'])
+def update_med_profile():
+    data = request.json
+    name = data.get('name')
+    department = data.get('department')
+    about = data.get('about')
+    location = data.get('location')
+    latitude = data.get('latitude')
+    longitude = data.get('longitude')
+    email = data.get('email')
+
+    if not (name and department and about and location and latitude and longitude and email):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Check if medical user exists
+            query = text("SELECT email FROM users WHERE email = :email")
+            existing_user = session.execute(query, {'email': email}).fetchone()
+
+            if not existing_user:
+                return jsonify({'error': 'Medical user not found'}), 404
+
+            # Update medical profile
+            update_query = text("""
+                UPDATE users
+                SET name = :name,
+                    department = :department,
+                    about = :about,
+                    location = :location,
+                    latitude = :latitude,
+                    longitude = :longitude
+                WHERE email = :email
+            """)
+            session.execute(update_query, {
+                'name': name,
+                'department': department,
+                'about': about,
+                'location': location,
+                'latitude': latitude,
+                'longitude': longitude,
+                'email': email
+            })
+            session.commit()
+            return jsonify({'message': 'Medical profile updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=False)
