@@ -1726,7 +1726,7 @@ def update_org_profile():
     longitude = data.get('longitude', "")
     email = data.get('email')
 
-     if email is None:
+    if email is None:
         return jsonify({'error': 'Email is required'}), 400
 
     try:
@@ -1775,7 +1775,7 @@ def update_med_profile():
     longitude = data.get('longitude', "")
     email = data.get('email')
 
-     if email is None:
+    if email is None:
         return jsonify({'error': 'Email is required'}), 400
 
     try:
