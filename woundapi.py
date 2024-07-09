@@ -1673,33 +1673,40 @@ def add_practitioner():
     email = data.get('email')
     c_code = data.get('c_code')
     phone = data.get('phone')
+    org = data.get('org')
 
-    if not (name and email and c_code and phone):
+    if not (name and email and c_code and phone and org):
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
         with Session() as session:
-            # Check if email already exists
+            # Check if email or phone already exists
             query = text("SELECT email FROM users WHERE email = :email")
             existing_email = session.execute(query, {'email': email}).fetchone()
 
+            query = text("SELECT phone FROM users WHERE phone = :phone")
+            existing_phone = session.execute(query, {'phone': phone}).fetchone()
+
             if existing_email:
                 return jsonify({'error': 'Email already exists. Please login.'}), 400
+            elif existing_phone:
+                return jsonify({'error': 'Phone number already exists. Please use another phone number.'}), 400
             else:
                 # Generate UUID for session
                 uuid = generate_session_id()
                 # Generate license key
                 license_key = generate_license_key()
 
-                # Insert data into organisations table
-                query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key)")
+                # Insert data into users table
+                query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key, org) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :org)")
                 session.execute(query, {
                     'name': name, 
                     'email': email, 
                     'c_code': c_code, 
                     'phone': phone, 
                     'uuid': uuid, 
-                    'license_key': license_key
+                    'license_key': license_key,
+                    'org': org
                 })
                 session.commit()
                 return jsonify({'message': 'Data added successfully'}), 200
