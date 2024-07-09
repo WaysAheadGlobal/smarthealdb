@@ -1718,16 +1718,16 @@ def add_practitioner():
 @app.route('/update_org_profile', methods=['POST'])
 def update_org_profile():
     data = request.json
-    name = data.get('name')
-    department = data.get('department')
-    about = data.get('about')
-    location = data.get('location')
-    latitude = data.get('latitude')
-    longitude = data.get('longitude')
+    name = data.get('name', "")
+    department = data.get('department', "")
+    about = data.get('about', "")
+    location = data.get('location', "")
+    latitude = data.get('latitude', "")
+    longitude = data.get('longitude', "")
     email = data.get('email')
 
-    if not (name and department and about and location and latitude and longitude and email):
-        return jsonify({'error': 'Missing required fields'}), 400
+     if email is None:
+        return jsonify({'error': 'Email is required'}), 400
 
     try:
         with Session() as session:
@@ -1767,16 +1767,16 @@ def update_org_profile():
 @app.route('/update_med_profile', methods=['POST'])
 def update_med_profile():
     data = request.json
-    name = data.get('name')
-    department = data.get('department')
-    about = data.get('about')
-    location = data.get('location')
-    latitude = data.get('latitude')
-    longitude = data.get('longitude')
+    name = data.get('name', "")
+    department = data.get('department', "")
+    about = data.get('about', "")
+    location = data.get('location', "")
+    latitude = data.get('latitude', "")
+    longitude = data.get('longitude', "")
     email = data.get('email')
 
-    if not (name and department and about and location and latitude and longitude and email):
-        return jsonify({'error': 'Missing required fields'}), 400
+     if email is None:
+        return jsonify({'error': 'Email is required'}), 400
 
     try:
         with Session() as session:
