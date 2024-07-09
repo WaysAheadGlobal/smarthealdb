@@ -1791,7 +1791,7 @@ def update_med_profile():
             update_query = text("""
                 UPDATE users
                 SET name = :name,
-                    department = :department,
+                    departments = :department,
                     about = :about,
                     location = :location,
                     latitude = :latitude,
