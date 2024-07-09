@@ -960,49 +960,6 @@ def forgot_pin_org():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-@app.route('/send_otp_org', methods=['POST'])
-def send_otp_org():
-    data = request.json
-    phone = data.get('phone')
-
-    if not phone:
-        return jsonify({'error': 'Phone number is required'}), 400
-
-    try:
-        with Session() as session:
-            # Fetch organisation details from the database
-            query = text("SELECT * FROM organisations WHERE phone = :phone")
-            organisation = session.execute(query, {'phone': phone}).fetchone()
-
-            if organisation:
-                phone_with_code = organisation.c_code + organisation.phone
-                otp = generate_otp()
-                send_sms(phone_with_code, otp)
-
-                # Update OTP details in database
-                expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
-                update_otp_in_database(session, phone, otp, expiry_time)
-                
-                return jsonify({'status': 200, 'message': 'OTP sent on mobile.'}), 200
-            else:
-                return jsonify({'status': 0, 'message': 'OOPS! Phone does not exist!'}), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-def update_otp_in_database(session, phone, otp, expiry_time):
-    try:
-        # Query to update OTP details
-        query = text("UPDATE organisations SET otp= :otp, otp_expiry= :expiry_time WHERE phone= :phone")
-        session.execute(query, {'otp': otp, 'expiry_time': expiry_time, 'phone': phone})
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        raise e
-    
-
-
 @app.route('/organisation_details', methods=['GET'])
 def organisation_details():
     data = request.json
@@ -1103,60 +1060,6 @@ def forgot_pin_med():
                 return jsonify({'error': 'Email or phone not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
-@app.route('/send_otp_med', methods=['POST'])
-def send_otp_med():
-    data = request.json
-    phone = data.get('phone')
-
-    if not phone:
-        return jsonify({'error': 'Phone number is required'}), 400
-
-    try:
-        with Session() as session:
-            # Fetch organisation details from the database
-            query = text("SELECT * FROM users WHERE phone = :phone")
-            organisation = session.execute(query, {'phone': phone}).fetchone()
-
-            if organisation:
-                phone_with_code = organisation.c_code + organisation.phone
-                otp = generate_otp()
-                send_sms(phone_with_code, otp)
-
-                # Update OTP details in database
-                expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
-                update_otp_in_database(session, phone, otp, expiry_time)
-                
-                return jsonify({'status': 200, 'message': 'OTP sent on mobile.'}), 200
-            else:
-                return jsonify({'status': 0, 'message': 'OOPS! Phone does not exist!'}), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-def generate_otp():
-    return str(random.randint(1000, 9999))
-
-def send_sms(phone, otp):
-    client = Client(account_sid, auth_token)
-    client.messages.create(
-        body=f"Your verification code is: {otp}. Don't share this code with anyone; our employees will never ask for the code.",
-        from_=twilio_number,
-        to=phone
-    )
-
-def update_otp_in_database(session, phone, otp, expiry_time):
-    try:
-        # Query to update OTP details
-        query = text("UPDATE users SET otp= :otp, otp_expiry= :expiry_time WHERE phone= :phone")
-        session.execute(query, {'otp': otp, 'expiry_time': expiry_time, 'phone': phone})
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        raise e
-    
-
 
 @app.route('/med_details', methods=['GET'])
 def med_details():
