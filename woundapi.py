@@ -907,7 +907,12 @@ def change_pin_org():
 
     if not (email and current_pin and new_pin):
         return jsonify({'error': 'Missing required fields'}), 400
-
+    try:
+        current_pin = int(current_pin)
+        new_pin = int(new_pin)
+    except ValueError:
+        return jsonify({'error': 'Pins must be numeric'}), 400
+    
     try:
         with Session() as session:
             # Verify the current pin
