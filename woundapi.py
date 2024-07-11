@@ -1865,6 +1865,7 @@ def get_wound_details_v2():
                     'size_variation': row.size_variation,
                     'image': row.image,
                     'patient_id': row.patient_id,
+                    'area': row.area,
                     'updated_at': row.updated_at.isoformat()
                 })
 
