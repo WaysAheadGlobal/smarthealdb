@@ -1720,6 +1720,163 @@ def update_med_profile():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/add_wound_details_v2', methods=['POST'])
+def add_wound_details_v2():
+    # Get the Authorization header
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+    # Get the data from the request
+    data = request.form
+    length = data.get('length')
+    breadth = data.get('breadth')
+    depth = data.get('depth')
+    area = data.get('area')
+    moisture = data.get('moisture')
+    wound_location = data.get('wound_location')
+    tissue = data.get('tissue')
+    exudate = data.get('exudate')
+    periwound = data.get('periwound')
+    periwound_type = data.get('periwound_type')
+    patient_id = data.get('patient_id')
+    type = data.get('type')
+    category = data.get('category')
+    edge = data.get('edge')
+    infection = data.get('infection')
+    last_dressing_date = data.get('last_dressing_date')
+
+    if not (length and breadth and depth and area and moisture):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    updated_at = datetime.datetime.utcnow()
+
+    # Image handling
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image provided'}), 400
+
+    image_file = request.files['image']
+
+    if image_file.filename == '':
+        return jsonify({'error': 'Empty filename provided'}), 400
+
+    filename = secure_filename(image_file.filename)
+
+    try:
+        with Session() as session:
+            # Fetch the existing area from the 'wounds' table
+            query = text("SELECT area, id, created_at FROM wounds WHERE patient_id = :patient_id")
+            result = session.execute(query, {'patient_id': patient_id}).fetchone()
+            
+            if not result:
+                return jsonify({'error': 'Patient not found'}), 404
+
+            existing_area = result[0]
+            wound_id = result[1]
+            created_at = result[2]
+            area_difference = float(area) - float(existing_area)
+            if area_difference > 0:
+                size_variation = 'wound area increased'
+            elif area_difference < 0:
+                size_variation = 'wound area reduced'
+            else:
+                size_variation = 'wound area same'
+
+            
+            patient_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'wounds', patient_id)
+            os.makedirs(patient_folder, exist_ok=True)
+            image_path = os.path.join(patient_folder, filename)
+            image_file.save(image_path)
+
+            # Construct full URL for the image
+            image_url = f"{BASE_URL}/uploads/wounds/{patient_id}/{filename}"
+
+            # Insert the data into the 'wound_images' table
+            uuid = generate_session_id()
+            query1 = text("""
+                INSERT INTO wound_images (depth, width, height, uuid, updated_at, patient_id, size_variation, image, wound_id, created_at, area)
+                VALUES (:depth, :breadth, :length, :uuid, :updated_at, :patient_id, :size_variation, :image_url, :wound_id, :created_at, :area)
+            """)
+            session.execute(query1, {
+                'depth': depth, 'breadth': breadth, 'length': length, 'uuid': uuid, 
+                'updated_at': updated_at, 'patient_id': patient_id, 'size_variation': size_variation,
+                'image_url': image_url, 'wound_id': wound_id, 'created_at': created_at, 'area': area
+            })
+
+            # Update the 'wounds' table
+            query2 = text("""
+                UPDATE wounds SET height = :length, width = :breadth, depth = :depth, area = :area, 
+                moisture = :moisture, position = :wound_location, tissue = :tissue, exudate = :exudate, 
+                periwound = :periwound, periwound_type = :periwound_type, type = :type, category = :category, 
+                edges = :edge, infection = :infection, updated_at = :updated_at, last_dressing = :last_dressing_date,
+                image = :image_url  
+                WHERE patient_id = :patient_id
+            """)
+            session.execute(query2, {
+                'length': length, 'breadth': breadth, 'depth': depth, 'area': area, 
+                'moisture': moisture, 'wound_location': wound_location, 'tissue': tissue, 
+                'exudate': exudate, 'periwound': periwound, 'periwound_type': periwound_type, 
+                'type': type, 'category': category, 'edge': edge, 'infection': infection,
+                'updated_at': updated_at, 'last_dressing_date': last_dressing_date, 'patient_id': patient_id,
+                'image_url': image_url
+            })
+
+            session.commit()
+        return jsonify({
+            'message': 'Wound details and image stored successfully',
+            'image_url': image_url
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/uploads/wounds/<patient_id>/<filename>')
+def wound_uploaded_file(patient_id, filename):
+    return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'wounds', patient_id), filename)
+
+@app.route('/wound_progress_timeline', methods=['GET'])
+def get_wound_details():
+    data = request.json
+    patient_id = data.get('patient_id')
+    if not patient_id:
+        return jsonify({'error': 'patient_id is required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("""
+                SELECT * FROM wound_images WHERE patient_id = :patient_id ORDER BY updated_at DESC """)
+            results = session.execute(query, {'patient_id': patient_id}).fetchall()
+
+            wound_details = []
+            for row in results:
+                wound_details.append({
+                    'length': row.height,
+                    'breadth': row.width,
+                    'depth': row.depth,
+                    'size_variation': row.size_variation,
+                    'image': row.image,
+                    'patient_id': row.patient_id,
+                    'updated_at': row.updated_at.isoformat()
+                })
+
+        return jsonify(wound_details), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=False)
