@@ -1843,12 +1843,8 @@ def add_wound_details_v2():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/uploads/wounds/<patient_id>/<filename>')
-def wound_uploaded_file(patient_id, filename):
-    return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], 'wounds', patient_id), filename)
-
 @app.route('/wound_progress_timeline', methods=['GET'])
-def get_wound_details():
+def get_wound_details_v2():
     data = request.json
     patient_id = data.get('patient_id')
     if not patient_id:
