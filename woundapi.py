@@ -1785,6 +1785,8 @@ def add_wound_details_v2():
                 return jsonify({'error': 'Patient not found'}), 404
 
             existing_area = result[0]
+            if not existing_area: 
+                existing_area = 0
             wound_id = result[1]
             created_at = result[2]
             area_difference = float(area) - float(existing_area)
