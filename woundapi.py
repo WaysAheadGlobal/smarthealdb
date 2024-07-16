@@ -1094,7 +1094,7 @@ def forgot_pin_med():
             result = session.execute(query, {'email': email}).fetchone()
 
             if result:
-                if result.otp == otp or otp == "1234" :
+                if result.otp == otp :
                     # Update with the new pin
                     update_query = text("UPDATE users SET pin = :new_pin WHERE email = :email")
                     session.execute(update_query, {'new_pin': new_pin, 'email': email})
