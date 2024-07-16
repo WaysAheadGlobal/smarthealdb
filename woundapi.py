@@ -524,8 +524,9 @@ def send_otp():
                 #send_sms(phone_with_code, otp)
 
                 # Update OTP details in database
+                updated_at = datetime.datetime.utcnow()
                 expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
-                update_otp_in_database(session, phone, otp, expiry_time)
+                update_otp_in_database(session, phone, otp, expiry_time, updated_at)
                 
                 token = jwt.encode({'email': organisation.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
                 return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': organisation.email, 'name': organisation.name, 'pin': organisation.pin}), 200
@@ -548,11 +549,11 @@ def generate_otp():
     return str(random.randint(1000, 9999))
 
 
-def update_otp_in_database(session, phone, otp, expiry_time):
+def update_otp_in_database(session, phone, otp, expiry_time, updated_at):
     try:
         # Query to update OTP details
-        query = text("UPDATE organisations SET otp= :otp, otp_expiry= :expiry_time WHERE phone= :phone")
-        session.execute(query, {'otp': otp, 'expiry_time': expiry_time, 'phone': phone})
+        query = text("UPDATE organisations SET otp= :otp, otp_expiry= :expiry_time, updated_at = :updated_at WHERE phone= :phone")
+        session.execute(query, {'otp': otp, 'expiry_time': expiry_time, 'phone': phone, 'updated_at': updated_at})
         session.commit()
     except Exception as e:
         return str(e)
@@ -787,8 +788,9 @@ def med_send_otp():
                 #send_sms(phone_with_code, otp)
 
                 # Update OTP details in database
+                updated_at = datetime.datetime.utcnow()
                 expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
-                update_otp_in_database(session, phone, otp, expiry_time)
+                update_otp_in_med_database(session, phone, otp, expiry_time, updated_at)
                 
                 token = jwt.encode({'email': user.email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, JWT_SECRET_KEY, algorithm='HS256')
                 return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'token': token, 'otp': otp, 'email': user.email, 'name': user.name, 'pin': user.pin}), 200
@@ -811,11 +813,11 @@ def generate_otp():
     return str(random.randint(1000, 9999))
 
 
-def update_otp_in_med_database(session, phone, otp, expiry_time):
+def update_otp_in_med_database(session, phone, otp, expiry_time, updated_at):
     try:
         # Query to update OTP details
-        query = text("UPDATE users SET otp= :otp, otp_expiry= :expiry_time WHERE phone= :phone")
-        session.execute(query, {'otp': otp, 'expiry_time': expiry_time, 'phone': phone})
+        query = text("UPDATE users SET otp= :otp, otp_expiry= :expiry_time, updated_at = :updated_at WHERE phone= :phone")
+        session.execute(query, {'otp': otp, 'expiry_time': expiry_time, 'phone': phone, 'updated_at': updated_at})
         session.commit()
     except Exception as e:
         return str(e)
@@ -936,13 +938,29 @@ def change_pin_org():
 
 @app.route('/forgot_pin_org', methods=['POST'])
 def forgot_pin_org():
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+        
     data = request.json
     email = data.get('email')
-    phone = data.get('phone')
     otp = data.get('otp')
     new_pin = data.get('new_pin')
 
-    if not (email and phone and otp and new_pin):
+    if not (email and otp and new_pin):
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
@@ -955,14 +973,14 @@ def forgot_pin_org():
     try:
         with Session() as session:
             # Verify the OTP
-            query = text("SELECT otp FROM organisations WHERE email = :email AND phone = :phone")
-            result = session.execute(query, {'email': email, 'phone': phone}).fetchone()
+            query = text("SELECT otp FROM organisations WHERE email = :email")
+            result = session.execute(query, {'email': email}).fetchone()
 
             if result:
-                if result.otp == otp or otp == 1234 :
+                if result.otp == otp :
                     # Update with the new pin
-                    update_query = text("UPDATE organisations SET pin = :new_pin WHERE email = :email AND phone = :phone")
-                    session.execute(update_query, {'new_pin': new_pin, 'email': email, 'phone': phone})
+                    update_query = text("UPDATE organisations SET pin = :new_pin WHERE email = :email")
+                    session.execute(update_query, {'new_pin': new_pin, 'email': email})
                     session.commit()
                     return jsonify({'message': 'Pin updated successfully'}), 200
                 else:
@@ -1044,26 +1062,42 @@ def change_pin_med():
 
 @app.route('/forgot_pin_med', methods=['POST'])
 def forgot_pin_med():
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+        
     data = request.json
     email = data.get('email')
-    phone = data.get('phone')
     otp = data.get('otp')
     new_pin = data.get('new_pin')
 
-    if not (email and phone and otp and new_pin):
+    if not (email and otp and new_pin):
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
         with Session() as session:
             # Verify the OTP
-            query = text("SELECT otp FROM users WHERE email = :email AND phone = :phone")
-            result = session.execute(query, {'email': email, 'phone': phone}).fetchone()
+            query = text("SELECT otp FROM users WHERE email = :email")
+            result = session.execute(query, {'email': email}).fetchone()
 
             if result:
                 if result.otp == otp or otp == "1234" :
                     # Update with the new pin
-                    update_query = text("UPDATE users SET pin = :new_pin WHERE email = :email AND phone = :phone")
-                    session.execute(update_query, {'new_pin': new_pin, 'email': email, 'phone': phone})
+                    update_query = text("UPDATE users SET pin = :new_pin WHERE email = :email")
+                    session.execute(update_query, {'new_pin': new_pin, 'email': email})
                     session.commit()
                     return jsonify({'message': 'Pin updated successfully'}), 200
                 else:
@@ -1880,6 +1914,100 @@ def get_wound_details_v2():
 
         return jsonify(wound_details), 200
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/med/forgot/pin/otp', methods=['POST'])
+def med_forgot_pin_otp():
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+    
+    data = request.json
+    phone = data.get('phone')
+
+    if not phone:
+        return jsonify({'error': 'Phone number is required'}), 400
+    try:
+        with Session() as session:
+            # Fetch professional details from the database
+            query = text("SELECT * FROM users WHERE phone = :phone")
+            user = session.execute(query, {'phone': phone}).fetchone()
+
+            if user:
+                phone_with_code = user.c_code + user.phone
+                #otp = generate_otp()
+                otp="1234"
+                #send_sms(phone_with_code, otp)
+
+                # Update OTP details in database
+                updated_at = datetime.datetime.utcnow()
+                expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+                update_otp_in_med_database(session, phone, otp, expiry_time, updated_at)
+                
+                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'otp': otp}), 200
+            else:
+                return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/org/forgot/pin/otp', methods=['POST'])
+def org_forgot_pin_otp():
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+    
+    data = request.json
+    phone = data.get('phone')
+
+    if not phone:
+        return jsonify({'error': 'Phone number is required'}), 400  
+    try:
+        with Session() as session:
+            # Fetch professional details from the database
+            query = text("SELECT * FROM organisations WHERE phone = :phone")
+            user = session.execute(query, {'phone': phone}).fetchone()
+
+            if user:
+                phone_with_code = user.c_code + user.phone
+                #otp = generate_otp()
+                otp="1234"
+                #send_sms(phone_with_code, otp)
+
+                # Update OTP details in database
+                updated_at = datetime.datetime.utcnow()
+                expiry_time = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+                update_otp_in_database(session, phone, otp, expiry_time, updated_at)
+                
+                return jsonify({'status': 200, 'message': 'OTP Sent on mobile.', 'otp': otp}), 200
+            else:
+                return jsonify({'status': 0, 'message': 'OOPS! Phone Does Not Exist!'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
