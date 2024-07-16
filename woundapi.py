@@ -986,7 +986,7 @@ def forgot_pin_org():
                 else:
                     return jsonify({'error': 'Invalid OTP'}), 400
             else:
-                return jsonify({'error': 'Email or phone not found'}), 404
+                return jsonify({'error': 'Email not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1086,6 +1086,11 @@ def forgot_pin_med():
 
     if not (email and otp and new_pin):
         return jsonify({'error': 'Missing required fields'}), 400
+    try:
+        # Typecast otp and new_pin to integers
+        otp = int(otp)
+    except ValueError:
+        return jsonify({'error': 'OTP must be integers'}), 400
 
     try:
         with Session() as session:
@@ -1103,7 +1108,7 @@ def forgot_pin_med():
                 else:
                     return jsonify({'error': 'Invalid OTP'}), 400
             else:
-                return jsonify({'error': 'Email or phone not found'}), 404
+                return jsonify({'error': 'Email not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
