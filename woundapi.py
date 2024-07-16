@@ -2016,6 +2016,29 @@ def org_forgot_pin_otp():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/update_scheduled_date_v2', methods=['POST'])
+def update_scheduled_date_v2():
+    data = request.json
+    email = data.get('email')
+    patient_id = data.get('patient_id')
+    scheduled_date = data.get('scheduled_date')
+
+    if not (email and patient_id and scheduled_date ):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            query = text("UPDATE patients SET scheduled_date = :scheduled_date WHERE email = :email AND patient_id = :patient_id")
+            result = session.execute(query, {'scheduled_date': scheduled_date, 'email': email, 'patient_id': patient_id})
+            session.commit()
+
+            if result.rowcount == 0:
+                return jsonify({'error': 'No matching record found'}), 404
+
+            return jsonify({'message': 'Scheduled date updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=False)
