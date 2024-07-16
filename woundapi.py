@@ -2039,6 +2039,57 @@ def update_scheduled_date_v2():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/total_appointments_v2', methods=['GET'])
+def total_appointments_v2():
+    data = request.json
+    start_date_str = data.get('start_date')
+    end_date_str = data.get('end_date')
+    email = data.get('email')
+
+    if not (start_date_str and end_date_str and email):
+        return jsonify({'error': 'Start date, end date, and doctor email parameters are required'}), 400
+
+    try:
+        start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d')
+        end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d')
+        
+        
+        with Session() as session:
+            query = text("""
+                SELECT DATE(scheduled_date) as date, COUNT(*) as total_appointments
+                FROM patients
+                WHERE scheduled_date BETWEEN :start_date AND :end_date
+                AND email = :email
+                GROUP BY DATE(scheduled_date)
+                ORDER BY DATE(scheduled_date)
+            """)
+
+            # Execute query
+            results = session.execute(query, {
+                'start_date': start_date,
+                'end_date': end_date,
+                'email': email
+            }).fetchall()
+
+            appointments_by_day = {}
+
+            for row in results:
+                date_str = row.date.strftime('%Y-%m-%d')
+                appointments_by_day[date_str] = row.total_appointments
+
+            # Ensure all dates in the range are included, even if they have 0 appointments
+            current_date = start_date
+            while current_date <= end_date:
+                date_str = current_date.strftime('%Y-%m-%d')
+                if date_str not in appointments_by_day:
+                    appointments_by_day[date_str] = 0
+                current_date += datetime.timedelta(days=1)
+
+            return jsonify({'appointments_by_day': appointments_by_day}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=False)
