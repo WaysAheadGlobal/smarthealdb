@@ -2018,6 +2018,23 @@ def org_forgot_pin_otp():
 
 @app.route('/update_scheduled_date_v2', methods=['POST'])
 def update_scheduled_date_v2():
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+        
     data = request.json
     email = data.get('email')
     patient_id = data.get('patient_id')
@@ -2041,6 +2058,23 @@ def update_scheduled_date_v2():
 
 @app.route('/total_appointments_v2', methods=['GET'])
 def total_appointments_v2():
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    # Extract the JWT token from the Authorization header
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Verify the JWT token using the secret key
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+        
     data = request.json
     start_date_str = data.get('start_date')
     end_date_str = data.get('end_date')
