@@ -2186,7 +2186,7 @@ def add_patient_v2():
                 org_id = org_result.id
 
                 # Insert into patients table with org_id
-               pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, org, added_by, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :org_id, :doctor, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
+                pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, org, added_by, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :org_id, :doctor, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
                 session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'org_id': org_id, 'doctor': doctor, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
 
                 # Insert into wounds table
