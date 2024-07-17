@@ -2221,8 +2221,8 @@ def save_notes_v2():
     notes = data.get('notes')
     remarks = data.get('remarks')
 
-    if not patient_id or not notes:
-        return jsonify({'error': 'Patient ID and notes are required'}), 400
+    if not patient_id :
+        return jsonify({'error': 'Patient ID is required'}), 400
 
     try:
         with Session() as session:
