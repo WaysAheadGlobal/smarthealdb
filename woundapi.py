@@ -1237,7 +1237,7 @@ def get_patient_details():
                     'profile_photo_path': patient_result.profile_photo_path,
                     'allergies': patient_result.allergy,
                     'past_history': patient_result.illness,
-                    'doctor_name': patient_result.doctor,
+                    'doctor_name': patient_result.added_by,
                     'care_facilities': patient_result.org,
                     'register_date': patient_result.created_at,
                     'wound_details': wound_details
@@ -2169,8 +2169,8 @@ def add_patient_v2():
                 doctor_id = user_result.id
 
                 # Insert into patients table with doctor_id
-                pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, doctor, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :doctor_id, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
-                session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'doctor_id': doctor_id, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
+                pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, doctor, added_by, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :doctor_id, :doctor, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
+                session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'doctor_id': doctor_id, 'doctor': doctor, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
 
                 # Insert into wounds table
                 wound_query = text("INSERT INTO wounds (uuid, patient_id, created_at, updated_at) VALUES (:uuid, :patient_id, :created_at, :updated_at)")
@@ -2186,8 +2186,8 @@ def add_patient_v2():
                 org_id = org_result.id
 
                 # Insert into patients table with org_id
-                pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, org, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :org_id, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
-                session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'org_id': org_id, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
+               pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, org, added_by, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :org_id, :doctor, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
+                session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'org_id': org_id, 'doctor': doctor, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
 
                 # Insert into wounds table
                 wound_query = text("INSERT INTO wounds (uuid, patient_id, created_at, updated_at) VALUES (:uuid, :patient_id, :created_at, :updated_at)")
