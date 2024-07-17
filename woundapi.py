@@ -2206,6 +2206,19 @@ def add_patient_v2():
 
 @app.route('/save_notes_v2', methods=['POST'])
 def save_notes_v2():
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+    token = auth_header.split(' ')[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error':'Invalid Token'}), 401
+        
     data = request.json
     patient_id = data.get('patient_id')
     notes = data.get('notes')
