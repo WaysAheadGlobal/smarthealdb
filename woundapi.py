@@ -1158,7 +1158,6 @@ def update_patient_details():
     patient_id = data.get('patient_id')
     allergies = data.get('allergies')
     past_history = data.get('past_history')
-    care_facilities = data.get('care_facilities')
 
     if not patient_id:
         return jsonify({'error': 'Patient ID parameter is required'}), 400
@@ -1167,13 +1166,12 @@ def update_patient_details():
         with Session() as session:
             query = text("""
                 UPDATE patients
-                SET allergy = :allergies, illness = :past_history, org = :care_facilities
+                SET allergy = :allergies, illness = :past_history
                 WHERE patient_id = :patient_id
             """)
             session.execute(query, {
                 'allergies': allergies, 
                 'past_history': past_history, 
-                'care_facilities': care_facilities, 
                 'patient_id': patient_id
             })
             session.commit()
@@ -1238,7 +1236,6 @@ def get_patient_details():
                     'allergies': patient_result.allergy,
                     'past_history': patient_result.illness,
                     'doctor_name': patient_result.added_by,
-                    'care_facilities': patient_result.org,
                     'register_date': patient_result.created_at,
                     'wound_details': wound_details
                 }
