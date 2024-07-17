@@ -2125,5 +2125,105 @@ def total_appointments_v2():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/add_patient_v2', methods=['POST'])
+def add_patient_v2():
+    # Get data from request
+    data = request.json
+    name = data.get('name')
+    dob = data.get('dob')
+    gender = data.get('gender')
+    age = data.get('age')
+    height = data.get('height')
+    weight = data.get('weight')
+    email = data.get('email')
+    doctor = data.get('doctor')
+    role = data.get('role')
+    patient_id = generate_patient_id()
+    auth_header = request.headers.get('Authorization')
+
+    # Check if the Authorization header is present and has the correct format
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+    token = auth_header.split(' ')[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error':'Invalid Token'}), 401
+    
+    # Set created_at, updated_at, and scheduled_date
+    created_at = datetime.datetime.utcnow() 
+    updated_at = datetime.datetime.utcnow()
+    scheduled_date = datetime.datetime.utcnow()  # Set this appropriately as per your application logic
+
+    try:
+        with Session() as session:
+            uuid = generate_session_id()
+            if role == "3":
+                # Search for doctor id in users table
+                user_query = text("SELECT id FROM users WHERE email = :email AND name = :doctor")
+                user_result = session.execute(user_query, {'email': email, 'doctor': doctor}).fetchone()
+                if not user_result:
+                    return jsonify({'error': 'Doctor not found'}), 404
+                doctor_id = user_result.id
+
+                # Insert into patients table with doctor_id
+                pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, doctor, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :doctor_id, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
+                session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'doctor_id': doctor_id, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
+
+                # Insert into wounds table
+                wound_query = text("INSERT INTO wounds (uuid, patient_id, created_at, updated_at) VALUES (:uuid, :patient_id, :created_at, :updated_at)")
+                session.execute(wound_query, {'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at})
+            
+            elif role == "5":
+                role_int = int(role)
+                # Search for organisation id in organisations table
+                org_query = text("SELECT id FROM organisations WHERE email = :email AND name = :doctor")
+                org_result = session.execute(org_query, {'email': email, 'doctor': doctor}).fetchone()
+                if not org_result:
+                    return jsonify({'error': 'Organisation not found'}), 404
+                org_id = org_result.id
+
+                # Insert into patients table with org_id
+                pat_query = text("INSERT INTO patients (name, dob, gender, age, height, weight, email, org, uuid, patient_id, created_at, updated_at, scheduled_date) VALUES (:name, :dob, :gender, :age, :height, :weight, :email, :org_id, :uuid, :patient_id, :created_at, :updated_at, :scheduled_date)")
+                session.execute(pat_query, {'name': name, 'dob': dob, 'gender': gender, 'age': age, 'height': height, 'weight': weight, 'email': email, 'org_id': org_id, 'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at, 'scheduled_date': scheduled_date})
+
+                # Insert into wounds table
+                wound_query = text("INSERT INTO wounds (uuid, patient_id, created_at, updated_at) VALUES (:uuid, :patient_id, :created_at, :updated_at)")
+                session.execute(wound_query, {'uuid': uuid, 'patient_id': patient_id, 'created_at': created_at, 'updated_at': updated_at})
+
+            else:
+                return jsonify({'error': 'Invalid role'}), 400
+            
+            # Commit the transaction to insert data into the database
+            session.commit()
+        
+        return jsonify({'message': 'Patient added successfully', 'patient_id': patient_id}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/save_notes_v2', methods=['POST'])
+def save_notes_v2():
+    data = request.json
+    patient_id = data.get('patient_id')
+    notes = data.get('notes')
+    remarks = data.get('remarks')
+
+    if not patient_id or not notes:
+        return jsonify({'error': 'Patient ID and notes are required'}), 400
+
+    try:
+        with Session() as session:
+            query = text("UPDATE patients SET notes = :notes, remarks = :remarks WHERE patient_id = :patient_id")
+            session.execute(query, {'notes': notes, 'remarks': remarks, 'patient_id': patient_id})
+            session.commit()
+
+        return jsonify({'message': 'Notes saved successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=False)
