@@ -2237,7 +2237,7 @@ def add_practitioner_v2():
     phone = data.get('phone')
     org_email = data.get('org_email')
 
-    if not (name and email and c_code and phone and org):
+    if not (name and email and c_code and phone and org_email):
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
