@@ -2229,7 +2229,7 @@ def save_notes_v2():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/admin_add_practitioner_v2', methods=['POST'])
-def add_practitioner():
+def add_practitioner_v2():
     data = request.json
     name = data.get('name')
     email = data.get('email')
