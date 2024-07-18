@@ -2237,7 +2237,7 @@ def add_practitioner_v2():
     phone = data.get('phone')
     org_email = data.get('org_email')
 
-    if not (name and email and c_code and phone and org_email):
+    if not name and email and c_code and phone and org_email:
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
@@ -2255,7 +2255,7 @@ def add_practitioner_v2():
                 return jsonify({'error': 'Phone number already exists. Please use another phone number.'}), 400
             else:
                 org_query = text("SELECT id FROM organisations WHERE email = :org_email")
-                org_result = session.execute(org_query, {'email': email}).fetchone()
+                org_result = session.execute(org_query, {'org_email': org_email}).fetchone()
                 if not org_result:
                     return jsonify({'error': 'Organisation not found'}), 404
                 org_id = org_result.id
