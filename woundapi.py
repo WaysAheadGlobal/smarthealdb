@@ -640,8 +640,9 @@ def med_create_pin():
     updated_at = datetime.datetime.utcnow()
     try:
         with Session() as session:
+            org ="0"
             token = jwt.encode({'email': email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)}, JWT_SECRET_KEY, algorithm='HS256')
-            query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key, pin, created_at, updated_at) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :pin, :created_at, :updated_at)")
+            query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key, pin, org, created_at, updated_at) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :pin, :org, :created_at, :updated_at)")
             session.execute(query, {
                 'name': data.get('name'),
                 'email': email,
@@ -650,6 +651,7 @@ def med_create_pin():
                 'uuid': generate_session_id(),
                 'license_key': license_key,
                 'pin': pin,
+                'org': org,
                 'created_at': created_at,
                 'updated_at': updated_at
                 
@@ -2223,6 +2225,58 @@ def save_notes_v2():
             session.commit()
 
         return jsonify({'message': 'Notes saved successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin_add_practitioner_v2', methods=['POST'])
+def add_practitioner():
+    data = request.json
+    name = data.get('name')
+    email = data.get('email')
+    c_code = data.get('c_code')
+    phone = data.get('phone')
+    org = data.get('org_email')
+
+    if not (name and email and c_code and phone and org):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            # Check if email or phone already exists
+            query = text("SELECT email FROM users WHERE email = :email")
+            existing_email = session.execute(query, {'email': email}).fetchone()
+
+            query = text("SELECT phone FROM users WHERE phone = :phone")
+            existing_phone = session.execute(query, {'phone': phone}).fetchone()
+
+            if existing_email:
+                return jsonify({'error': 'Email already exists. Please login.'}), 400
+            elif existing_phone:
+                return jsonify({'error': 'Phone number already exists. Please use another phone number.'}), 400
+            else:
+                org_query = text("SELECT id FROM organisations WHERE email = :org_email")
+                org_result = session.execute(org_query, {'email': email}).fetchone()
+                if not org_result:
+                    return jsonify({'error': 'Organisation not found'}), 404
+                org_id = org_result.id
+                # Generate UUID for session
+                uuid = generate_session_id()
+                # Generate license key
+                license_key = generate_license_key()
+
+                # Insert data into users table
+                query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key, org) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :org_id)")
+                session.execute(query, {
+                    'name': name, 
+                    'email': email, 
+                    'c_code': c_code, 
+                    'phone': phone, 
+                    'uuid': uuid, 
+                    'license_key': license_key,
+                    'org_id': org_id
+                })
+                session.commit()
+                return jsonify({'message': 'Data added successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
