@@ -910,12 +910,6 @@ def change_pin_org():
     if not (email and current_pin and new_pin):
         return jsonify({'error': 'Missing required fields'}), 400
     try:
-        current_pin = int(current_pin)
-        new_pin = int(new_pin)
-    except ValueError:
-        return jsonify({'error': 'Pins must be numeric'}), 400
-    
-    try:
         with Session() as session:
             # Verify the current pin
             query = text("SELECT pin FROM organisations WHERE email = :email")
@@ -964,11 +958,9 @@ def forgot_pin_org():
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
-        # Typecast otp and new_pin to integers
         otp = int(otp)
-        new_pin = int(new_pin)
     except ValueError:
-        return jsonify({'error': 'OTP and new PIN must be integers'}), 400
+        return jsonify({'error': 'OTP must be integers'}), 400
 
     try:
         with Session() as session:
