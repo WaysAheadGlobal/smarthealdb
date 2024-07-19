@@ -2230,6 +2230,19 @@ def save_notes_v2():
 
 @app.route('/admin_add_practitioner_v2', methods=['POST'])
 def add_practitioner_v2():
+    auth_header = request.headers.get('Authorization')
+
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
     data = request.json
     name = data.get('name')
     email = data.get('email')
@@ -2277,6 +2290,87 @@ def add_practitioner_v2():
                 })
                 session.commit()
                 return jsonify({'message': 'Data added successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/sort_patients', methods=['POST'])
+def sort_patients():
+    auth_header = request.headers.get('Authorization')
+
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+    data = request.json
+    email = data.get('email')
+    date_str = data.get('date')
+
+    if not email:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        with Session() as session:
+            if date_str:
+                appointment_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+                query = text("""
+                    SELECT * FROM patients WHERE scheduled_date = :appointment_date AND email = :email
+                """)
+                results = session.execute(query, {'appointment_date': appointment_date, 'email': email}).fetchall()
+            else:
+                query = text("""
+                    SELECT * FROM patients WHERE email = :email
+                """)
+                results = session.execute(query, {'email': email}).fetchall()
+
+            patient_dicts = [dict(row._mapping) for row in results]
+            return jsonify({'patients': patient_dicts}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/get_appointment_count', methods=['POST'])
+def get_appointment_count():
+    auth_header = request.headers.get('Authorization')
+
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Invalid Authorization header'}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token has expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401     
+    data = request.json
+    email = data.get('email')
+    date_str = data.get('date')
+
+    if not email or not date_str:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        appointment_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+        with Session() as session:
+            query = text("""
+                SELECT COUNT(*) as count FROM patients WHERE scheduled_date = :appointment_date AND email = :email
+            """)
+            result = session.execute(query, {'appointment_date': appointment_date, 'email': email}).fetchone()
+
+            total_appointments = result.count if result else 0
+
+            return jsonify({
+                'title': f'The total number of appointments booked is {total_appointments}',
+                'description': f'The appointments are scheduled for {appointment_date}'
+            }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
