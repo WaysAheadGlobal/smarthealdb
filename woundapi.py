@@ -2249,6 +2249,8 @@ def add_practitioner_v2():
     c_code = data.get('c_code')
     phone = data.get('phone')
     org_email = data.get('org_email')
+    created_at = datetime.datetime.utcnow() 
+    updated_at = datetime.datetime.utcnow()
 
     if not name and email and c_code and phone and org_email:
         return jsonify({'error': 'Missing required fields'}), 400
@@ -2278,7 +2280,7 @@ def add_practitioner_v2():
                 license_key = generate_license_key()
 
                 # Insert data into users table
-                query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key, org) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :org_id)")
+                query = text("INSERT INTO users (name, email, c_code, phone, uuid, licence_key, org, updated_at, created_at) VALUES (:name, :email, :c_code, :phone, :uuid, :license_key, :org_id, :updated_at, :created_at)")
                 session.execute(query, {
                     'name': name, 
                     'email': email, 
@@ -2286,7 +2288,9 @@ def add_practitioner_v2():
                     'phone': phone, 
                     'uuid': uuid, 
                     'license_key': license_key,
-                    'org_id': org_id
+                    'org_id': org_id,
+                    'updated_at': updated_at,
+                    'created_at': created_at
                 })
                 session.commit()
                 return jsonify({'message': 'Data added successfully'}), 200
